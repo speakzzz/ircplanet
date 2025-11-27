@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -60,12 +58,13 @@
 			return false;
 		}
 		
-		$password_md5 = md5($password);
+		// Modernization: Use password_hash instead of md5
+		$password_hash = password_hash($password, PASSWORD_DEFAULT);
 		
 		$account = new DB_User();
 		$account->setName($user->getNick());
 		$account->setRegisterTs(time());
-		$account->setPassword($password_md5);
+		$account->setPassword($password_hash);
 		$account->setEmail($email);
 		$account->setAutoOp(true);
 		$account->setAutoVoice(true);
@@ -87,5 +86,3 @@
 	else {
 		$bot->notice($user, "You have already registered your nick and logged in.");
 	}
-
-
