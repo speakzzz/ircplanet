@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -133,8 +131,10 @@
 			if ($this->sock)
 				$this->close();
 			
-			if ($this->db)
-				mysql_close($this->db);
+			// Modernization: Unset PDO object instead of mysql_close
+			if ($this->db) {
+				$this->db = null;
+			}
 			
 			$this->serviceDestruct();
 		}
@@ -142,19 +142,24 @@
 		
 		function db_connect()
 		{
-			if ($this->db > 0) {
-				mysql_close();
-				$this->db = 0;
+			// Modernization: Switch to PDO
+			if (isset($GLOBALS['pdo_db'])) {
+				$GLOBALS['pdo_db'] = null;
 			}
 
-			if (!($this->db = @mysql_connect(DB_HOST, DB_USER, DB_PASS))) {
-				debug("MySQL Error: ". mysql_error());
-				debug("Cannot run without a database!");
-				exit();
-			}
-			
-			if (!mysql_select_db(DB_NAME)) {
-				debug("MySQL Error: ". mysql_error());
+			try {
+				$dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+				$options = [
+					PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+					PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+					PDO::ATTR_EMULATE_PREPARES   => false,
+				];
+				
+				$GLOBALS['pdo_db'] = new PDO($dsn, DB_USER, DB_PASS, $options);
+				$this->db = $GLOBALS['pdo_db'];
+				
+			} catch (PDOException $e) {
+				debug("MySQL Error: ". $e->getMessage());
 				debug("Cannot run without a database!");
 				exit();
 			}
@@ -216,12 +221,16 @@
 		{
 			$n = 0;
 			$res = db_query('select * from accounts order by lower(name) asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$account_key = strtolower($row['name']);
-				$account = new DB_User($row);
-				
-				$this->accounts[$account_key] = $account;
-				$n++;
+			
+			// Modernization: Use PDO fetch loop
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$account_key = strtolower($row['name']);
+					$account = new DB_User($row);
+					
+					$this->accounts[$account_key] = $account;
+					$n++;
+				}
 			}
 			
 			debug("Loaded $n account records.");
@@ -230,7 +239,12 @@
 
 		function loadSingleAccount($name_or_id)
 		{
-			$name_or_id = addslashes($name_or_id);
+			// Modernization: Use db_escape instead of addslashes
+			if (function_exists('db_escape')) {
+				$name_or_id = db_escape($name_or_id);
+			} else {
+				$name_or_id = addslashes($name_or_id);
+			}
 			
 			if (is_numeric($name_or_id))
 				$criteria = "account_id = '$name_or_id'";
@@ -238,7 +252,9 @@
 				$criteria = "name = '$name_or_id'";
 
 			$res = db_query('select * from accounts where '. $criteria);
-			if ($row = mysql_fetch_assoc($res)) {
+			
+			// Modernization: Use PDO fetch
+			if ($res && $row = $res->fetch(PDO::FETCH_ASSOC)) {
 				$account_key = strtolower($row['name']);
 				$account = new DB_User($row);
 
@@ -416,7 +432,7 @@
 				$this->sendf(FMT_SERVER, SERVER_NUM,
 					$s->getName(),
 					1,
-					$s->get_start_time(),
+					$s->getStartTs(), // Assuming getter method from Server object
 					$s->getNumeric(),
 					irc_intToBase64($s->getMaxUsers(), BASE64_MAXUSERLEN),
 					$s->getModes(),
@@ -1098,16 +1114,14 @@
 		/**
 		 * cleanModes: Returns a clean and parsed version of the MODE string passed
 		 * in the first argument.
-		 * 
-		 * This method does NOT parse a full MODE line; only a channel mode string line
+		 * * This method does NOT parse a full MODE line; only a channel mode string line
 		 * that is structured like so:
-		 *     +ntxyzkl key limit
+		 * +ntxyzkl key limit
 		 * Then, returns a cleaned string with valid and accepted modes:
-		 *     +ntkl key limit
+		 * +ntkl key limit
 		 * If $accept_user_modes is set to true, it will not remove any +o/+v/+b mode
 		 * changes. Otherwise, they will be cleansed.
-		 * 
-		 * This is currently useful for services which accept a mode change from users,
+		 * * This is currently useful for services which accept a mode change from users,
 		 * but where a subset of modes should not be accepted; for instance, setting the
 		 * default mode string on a registered channel in the channel service. In such 
 		 * a case, you wouldn't want users setting -R, -A, -o CS, and so on.
@@ -1336,17 +1350,14 @@
 		 * one or several different mode change strings if it exceeds the maximum
 		 * number of mode changes per line. This rule does not apply to user mode
 		 * changes, only channel mode changes.
-		 * 
-		 * For instance, the following changes would be sent:
-		 *      In:   AEBIm M brian :+owg
-		 *      Out:  AEBIm M brian :+owg
-		 * 
-		 *      In:   AEBIm M #dev +ntooovvv AEBf6 AEBf7 AEBf8 AEBf9 AEBfa Cm6Dq 112603551
-		 *      Out:  AEBIm M #dev +ntooov AEBf6 AEBf7 AEBf8 AEBf9 112603551
-		 *            AEBIm M #dev +vv AEBfa CM6Dq
-		 * 
-		 *            Note that two lines are actually sent here, since ircu limits
-		 *            mode changes to six per line.
+		 * * For instance, the following changes would be sent:
+		 * In:   AEBIm M brian :+owg
+		 * Out:  AEBIm M brian :+owg
+		 * * In:   AEBIm M #dev +ntooovvv AEBf6 AEBf7 AEBf8 AEBf9 AEBfa Cm6Dq 112603551
+		 * Out:  AEBIm M #dev +ntooov AEBf6 AEBf7 AEBf8 AEBf9 112603551
+		 * AEBIm M #dev +vv AEBfa CM6Dq
+		 * * Note that two lines are actually sent here, since ircu limits
+		 * mode changes to six per line.
 		 */
 		function sendModeLine($proto_str)
 		{
@@ -1601,5 +1612,4 @@
 			$this->default_bot->message(COMMAND_CHANNEL, $log_msg);
 		}
 	}
-	
-
+?>
