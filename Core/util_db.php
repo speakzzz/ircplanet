@@ -30,19 +30,20 @@
 	require_once("core_globals.php");
 	
 	function db_get_pdo() {
-		global $pdo_db;
-		if (!isset($pdo_db) || $pdo_db === null) {
+		if (!isset($GLOBALS['pdo_db']) || $GLOBALS['pdo_db'] === null) {
 			// Attempt to find a running service to reconnect, or fail
 			if (isset($GLOBALS['INSTANTIATED_SERVICES']) && count($GLOBALS['INSTANTIATED_SERVICES']) > 0) {
 				foreach ($GLOBALS['INSTANTIATED_SERVICES'] as $service) {
 					$service->db_connect();
-					return $GLOBALS['pdo_db'];
+					if (isset($GLOBALS['pdo_db'])) {
+						return $GLOBALS['pdo_db'];
+					}
 				}
 			}
 			debug("DB Error: No active database connection.");
 			return false;
 		}
-		return $pdo_db;
+		return $GLOBALS['pdo_db'];
 	}
 
 	function db_query($query, $log = false)
@@ -55,15 +56,26 @@
 			
 			if ($log) {
 				debug("DB> $query");
+				// rowCount works for DELETE, INSERT, UPDATE. 
+				// For SELECT, it relies on the database driver, but works in MySQL.
 				debug("DB> (" . $stmt->rowCount() . " rows affected)");
 			}
+			
 			return $stmt;
 		} catch (PDOException $e) {
 			debug("DB Error> " . $e->getMessage());
 			debug("DB Query> " . $query);
 			
-			// Handle 'Server has gone away' (MySQL error 2006) logic via Exception code/message if needed here
-			// But strictly, PDO usually throws exceptions.
+			// Check for "MySQL server has gone away" (2006) or similar disconnection errors
+			// The error code might be wrapped in the message or available via errorInfo
+			if (strpos($e->getMessage(), '2006') !== false) {
+				foreach ($GLOBALS['INSTANTIATED_SERVICES'] as $service) {
+					$service->db_connect();
+					// Retry once
+					return db_query($query, $log);
+				}
+			}
+			
 			return false;
 		}
 	}
@@ -73,6 +85,10 @@
 	{
 		$args = func_get_args();
 		$format = array_shift($args);
+		
+		// WARNING: vsprintf is not safe against SQL injection if arguments are not escaped.
+		// Ensure all inputs passed to db_queryf are run through db_escape() first 
+		// or are strictly typed (integers).
 		$query = vsprintf($format, $args);
 		
 		return db_query($query);
@@ -86,14 +102,27 @@
 
 		return date('Y-m-d H:i:s', $ts);
 	}
-
-	// Helper to escape strings (replacing addslashes)
+	
+	/**
+	 * Escapes a string for use in a query.
+	 * Replaces deprecated addslashes/mysql_real_escape_string.
+	 * * Note: PDO::quote() adds surrounding quotes (e.g. 'string').
+	 * Since the legacy code often builds queries like "name = '$name'",
+	 * we strip the outer quotes to maintain compatibility.
+	 */
 	function db_escape($string) {
 		$pdo = db_get_pdo();
-		if (!$pdo) return addslashes($string); // Fallback
-		// PDO::quote adds quotes around the string, we often just want the escaped string
-		// for building legacy queries. We strip the surrounding quotes.
+		if (!$pdo) {
+			// Fallback if no connection, though this is risky for multibyte chars
+			return addslashes($string); 
+		}
+		
 		$quoted = $pdo->quote($string);
-		if ($quoted === false) return addslashes($string);
-		return substr($quoted, 1, -1);
+		
+		// Remove the surrounding single quotes added by PDO::quote
+		if (substr($quoted, 0, 1) === "'" && substr($quoted, -1) === "'") {
+			return substr($quoted, 1, -1);
+		}
+		
+		return $quoted;
 	}
