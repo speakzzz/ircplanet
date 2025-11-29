@@ -3,6 +3,28 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
+ * * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ * 3. Neither the name of ircPlanet nor the names of its contributors may be
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 	
 	function right($str, $len)
@@ -57,10 +79,16 @@
 	{
 		$ex_pos = strpos($mask, '!');
 		$at_pos = strpos($mask, '@');
-		$ident = substr($mask, $ex_pos + 1, $at_pos - $ex_pos - 1);
 		
-		if (strlen($ident) > IDENT_LEN) {
-			$mask = substr($mask, 0, $ex_pos) .'!*'. right($ident, IDENT_LEN - 1) . substr($mask, $at_pos);
+		if ($ex_pos === false) $ex_pos = 0;
+		if ($at_pos === false) $at_pos = 0;
+
+		if ($ex_pos > 0 && $at_pos > $ex_pos) {
+			$ident = substr($mask, $ex_pos + 1, $at_pos - $ex_pos - 1);
+			
+			if (strlen($ident) > IDENT_LEN) {
+				$mask = substr($mask, 0, $ex_pos) .'!*'. right($ident, IDENT_LEN - 1) . substr($mask, $at_pos);
+			}
 		}
 		
 		return $mask;
@@ -162,97 +190,85 @@
 	{
 		$args = func_get_args(); 
 		array_shift($args); 
-		
 		return irc_vsprintf($format, $args);
 	}
 	
+	/**
+	 * irc_vsprintf: Modern implementation using callbacks to handle custom specifiers safely.
+	 */ 
 	function irc_vsprintf($format, $args)
 	{
-		$std_types = 'bcdeufFosxX';
-		$custom_types = 'ACHNU';
+		// Track the current argument index
+		$arg_idx = 0;
 
-		$len = strlen($format);
-		$arg_index = -1;
-		$pct_count = 0;
+		$callback = function($matches) use (&$args, &$arg_idx) {
+			// $matches[0] is the full specifier (e.g. "%-10s" or "%A")
+			// $matches[1] is the type char (e.g. "s" or "A")
 
-		for ($i = 0; $i < $len - 1; $i++) {
-			$char = $format[$i];
-			$next = $format[$i + 1];
+			if ($matches[1] == '%') return '%'; // Handle escaped %%
 
-			if ($char == '%')
-				$pct_count++;
-			else
-				$pct_count = 0;
-
-			if ($pct_count != 1 || $next == '%')
-				continue;
-
-			$spec_start = $i;
-			$spec_end = $i + 1;
-			$type = '';
-
-			for ($j = $i + 1; $j < $len; $j++) {
-				$tmp_char = $format[$j];
-				$is_std_type = (false !== strpos($std_types, $tmp_char));
-				$is_cust_type = (false !== strpos($custom_types, $tmp_char));
-
-				if ($is_std_type || $is_cust_type) {
-					$type = $tmp_char;
-					$arg_index++;
-					$spec_end = $j;
-					break;
-				}
+			if (!array_key_exists($arg_idx, $args)) {
+				return ''; // Missing argument protection
 			}
 
-			if ($is_cust_type) {
-				$arg_obj = isset($args[$arg_index]) ? $args[$arg_index] : null;
-				$cust_text = '';
+			$arg = $args[$arg_idx++];
+			$type = $matches[1];
+			$full_spec = $matches[0];
 
-				switch ($type) {
-					case 'A':
-						if (is_array($arg_obj)) $cust_text = implode(' ', $arg_obj);
-						else $cust_text = (string)$arg_obj;
-						break;
+			switch ($type) {
+				case 'A': // Array: implode with spaces
+					$val = is_array($arg) ? implode(' ', $arg) : (string)$arg;
+					// Replace %A with %s in the specifier string so sprintf can handle it
+					$spec = str_replace('A', 's', $full_spec);
+					return sprintf($spec, $val);
 
+				case 'C': // Channel/Server/User Name
+				case 'H': 
+					$val = '';
+					if (is_object($arg)) {
+						if (method_exists($arg, 'getNick')) $val = $arg->getNick();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						elseif (method_exists($arg, 'getMask')) $val = $arg->getMask();
+					} else {
+						$val = (string)$arg;
+					}
+					$spec = str_replace($type, 's', $full_spec);
+					return sprintf($spec, $val);
 
-					case 'C':
-					case 'H':
-						if (isUser($arg_obj))
-							$cust_text = $arg_obj->getNick();
-						elseif (isChannel($arg_obj) || isServer($arg_obj))
-							$cust_text = $arg_obj->getName();
-						elseif (isGline($arg_obj))
-							$cust_text = $arg_obj->getMask();
+				case 'N': // Numeric
+					$val = '';
+					if (is_object($arg) && method_exists($arg, 'getNumeric')) {
+						$val = $arg->getNumeric();
+					} else {
+						$val = (string)$arg;
+					}
+					$spec = str_replace('N', 's', $full_spec);
+					return sprintf($spec, $val);
 
-						break;
+				case 'U': // Account Name
+					$val = '';
+					if (is_object($arg)) {
+						if (method_exists($arg, 'getAccountName')) $val = $arg->getAccountName();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+					} else {
+						$val = (string)$arg;
+					}
+					$spec = str_replace('U', 's', $full_spec);
+					return sprintf($spec, $val);
 
-
-					case 'N':
-						if (isUser($arg_obj) || isServer($arg_obj))
-							$cust_text = $arg_obj->getNumeric();
-
-						break;
-
-
-					case 'U':
-						if (isUser($arg_obj))
-							$cust_text = $arg_obj->getAccountName();
-						elseif (isAccount($arg_obj))
-							$cust_text = $arg_obj->getName();
-
-						break;
-
-					default:
-						continue 2;
-				}
-				
-				$format[$spec_end] = 's';
-				$args[$arg_index] = $cust_text;
-				$i = $spec_end + 1;
+				default:
+					// Standard specifier, use original arg and spec
+					return sprintf($full_spec, $arg);
 			}
-		}
+		};
 
-		return vsprintf($format, $args);
+		// Regex to match printf specifiers: % [flags/width/precision] type
+		// Types: Standard (bcdeufFosxX) + Custom (ACHNU) + Literal (%)
+		return preg_replace_callback(
+			'/%(?:[0-9.\-]*[bcdeufFosxXACHNU%])/', 
+			$callback, 
+			$format
+		);
 	}
 	
 
