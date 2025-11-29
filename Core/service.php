@@ -131,7 +131,6 @@
 			if ($this->sock)
 				$this->close();
 			
-			// Modernization: Unset PDO object instead of mysql_close
 			if ($this->db) {
 				$this->db = null;
 			}
@@ -142,7 +141,6 @@
 		
 		function db_connect()
 		{
-			// Modernization: Switch to PDO
 			if (isset($GLOBALS['pdo_db'])) {
 				$GLOBALS['pdo_db'] = null;
 			}
@@ -222,7 +220,6 @@
 			$n = 0;
 			$res = db_query('select * from accounts order by lower(name) asc');
 			
-			// Modernization: Use PDO fetch loop
 			if ($res) {
 				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
 					$account_key = strtolower($row['name']);
@@ -239,7 +236,6 @@
 
 		function loadSingleAccount($name_or_id)
 		{
-			// Modernization: Use db_escape instead of addslashes
 			if (function_exists('db_escape')) {
 				$name_or_id = db_escape($name_or_id);
 			} else {
@@ -253,7 +249,6 @@
 
 			$res = db_query('select * from accounts where '. $criteria);
 			
-			// Modernization: Use PDO fetch
 			if ($res && $row = $res->fetch(PDO::FETCH_ASSOC)) {
 				$account_key = strtolower($row['name']);
 				$account = new DB_User($row);
@@ -432,7 +427,7 @@
 				$this->sendf(FMT_SERVER, SERVER_NUM,
 					$s->getName(),
 					1,
-					$s->getStartTs(), // Assuming getter method from Server object
+					$s->getStartTs(), 
 					$s->getNumeric(),
 					irc_intToBase64($s->getMaxUsers(), BASE64_MAXUSERLEN),
 					$s->getModes(),
@@ -1022,8 +1017,17 @@
 				socket_set_option($this->sock, SOL_SOCKET, SO_SNDTIMEO, array("sec" => $timeout, "usec" => 0));
 				
 				$this->servicePreread();
-				$buffer .= @socket_read($this->sock, 1024);
-				$this->bytes_received += strlen($buffer);
+				
+				// FIX: Check for remote disconnect (EOF)
+				$read = @socket_read($this->sock, 1024);
+				
+				if ($read === "") {
+					debug("ERROR: Remote host closed the connection.");
+					break; // Exit the main loop
+				}
+				
+				$buffer .= $read;
+				$this->bytes_received += strlen($read);
 				
 				$break_time = time();
 				foreach ($this->timers as $n => $timer) {
