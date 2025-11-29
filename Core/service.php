@@ -1543,27 +1543,36 @@
 		
 		function performChanUserMode($source_num, $chan_name, $mode_pol, $mode_char, $arg_list)
 		{
-			$args = array();
 			$chan = $this->getChannel($chan_name);
 			
 			if (!$chan)
 				return;
 			
+			// Normalize $arg_list to a flat array of strings
 			if (!is_array($arg_list)) {
-				$arg_list = array();
-				$arg_count = func_num_args();
-
-				for ($i = 4; $i < $arg_count; ++$i)
-					$arg_list[] = func_get_arg($i);
+				$arg_list = array($arg_list);
 			}
+            
+            // Ensure no nested arrays exist (flatten just in case)
+            $flat_list = array();
+            foreach ($arg_list as $arg) {
+                if (is_array($arg)) {
+                    $flat_list[] = implode('', $arg); 
+                } else {
+                    $flat_list[] = (string)$arg;
+                }
+            }
 
-			// FIX: Ensure $arg_list is a string if it is an array
-			$mode_args = is_array($arg_list) ? implode(' ', $arg_list) : $arg_list;
-
-			$mode_str = $mode_pol . str_repeat($mode_char, count(is_array($arg_list) ? $arg_list : [$arg_list]));
+			$mode_args = implode(' ', $flat_list);
+			$mode_str = $mode_pol . str_repeat($mode_char, count($flat_list));
+            
+            // Cast other args to string explicitly
+            $src = (string)$source_num;
+            $chn = (string)$chan->getName();
+            $ts = (int)$chan->getTs();
 			
-			// Use %s instead of %A as we pre-formatted the arguments
-			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
+			// Use %s explicitly to avoid %A confusion
+			$mode_line = irc_sprintf(FMT_MODE_HACK, $src, $chn, $mode_str, $mode_args, $ts);
 			return $this->sendModeLine($mode_line);
 		}
 		
