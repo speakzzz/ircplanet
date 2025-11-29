@@ -534,16 +534,9 @@
 			 * DNSBL services (some are IRC-centric) to see if they are listed.
 			 */
 			$blacklists = array(
-				'ircbl.ahbl.org'      => array(2),
-				'dnsbl.dronebl.org'   => array(),
-				'dnsbl.proxybl.org'   => array(2),
-				'rbl.efnetrbl.org'    => array(1, 2, 3, 4),
-				'dnsbl.swiftbl.net'   => array(2, 3, 4, 5),
-				'cbl.abuseat.org'     => array(2),
-				'xbl.spamhaus.org'    => array(),
-				'drone.abuse.ch'      => array(2, 3, 4, 5),
-				'httpbl.abuse.ch'     => array(2, 3, 4),
-				'spam.abuse.ch'       => array(2)
+				'dnsbl.dronebl.org'   => array(3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19),
+				'rbl.efnetrbl.org'    => array(1, 2, 3, 4, 5)
+				'rbl.evilnet.org'   => array(3, 5, 6, 7, 8, 10, 17, 18),
 			);
 			
 			foreach ($blacklists as $dns_suffix => $responses) {
