@@ -1547,8 +1547,12 @@
 					$arg_list[] = func_get_arg($i);
 			}
 
-			$mode_str = $mode_pol . str_repeat($mode_char, count($arg_list));
-			$mode_args = implode(' ', $arg_list);
+			// FIX: Ensure $arg_list is a string if it is an array
+			$mode_args = is_array($arg_list) ? implode(' ', $arg_list) : $arg_list;
+
+			$mode_str = $mode_pol . str_repeat($mode_char, count(is_array($arg_list) ? $arg_list : [$arg_list]));
+			
+			// Use %s instead of %A as we pre-formatted the arguments
 			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
 			return $this->sendModeLine($mode_line);
 		}
