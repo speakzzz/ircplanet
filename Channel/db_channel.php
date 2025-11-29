@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -51,13 +49,14 @@
 		protected $_update_timestamp_field = 'update_date';
 		
 		protected $channel_id = 0;
-		protected $name;
-		protected $register_ts;
-		protected $create_ts;
-		protected $purpose;
+		protected $name = '';
+		protected $register_ts = 0;
+		protected $create_ts = 0;
+		protected $purpose = '';
 		
-		protected $def_topic;
-		protected $def_modes;
+		protected $url = '';
+		protected $def_topic = '';
+		protected $def_modes = '';
 		protected $info_lines = 0;
 		protected $suspend = 0;
 		protected $no_purge = 0;
@@ -76,6 +75,11 @@
 		protected $topic_lock = 0;
 		protected $no_op = 0;
 		protected $no_voice = 0;
+		
+		// Fix: Declare these properties explicitly for PHP 8+ compatibility
+		protected $register_date = null;
+		protected $create_date = null;
+		protected $update_date = null;
 		
 		protected $levels = array();
 		protected $bans = array();
@@ -332,5 +336,4 @@
 		}
 		
 	}
-	
-
+?>

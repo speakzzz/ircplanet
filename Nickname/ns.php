@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -95,12 +93,16 @@
 		function loadBadnicks()
 		{
 			$res = db_query('select * from ns_badnicks order by badnick_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$badnick = new DB_BadNick($row);
-				
-				$badnick_key = strtolower($badnick->getMask());
-				$this->db_badnicks[$badnick_key] = $badnick;
-			}
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $badnick = new DB_BadNick($row);
+                    
+                    $badnick_key = strtolower($badnick->getMask());
+                    $this->db_badnicks[$badnick_key] = $badnick;
+                }
+            }
 
 			debugf('Loaded %d badnicks.', count($this->db_badnicks));
 		}
@@ -118,10 +120,13 @@
 			else
 				$account = $user_obj;
 			
-			$res = db_query("select `level` from `ns_admins` where user_id = ". $account->getId());
-			if ($res && mysql_num_rows($res) > 0) {
-				$level = mysql_result($res, 0);
-				mysql_free_result($res);
+            // Modernization: Use db_escape for safety
+            $userId = $account->getId();
+			$res = db_query("select `level` from `ns_admins` where user_id = '$userId'");
+			
+            // Modernization: Use rowCount() and fetchColumn()
+			if ($res && $res->rowCount() > 0) {
+				$level = $res->fetchColumn(0);
 				return $level;
 			}
 			
@@ -183,5 +188,4 @@
 	}
 	
 	$cs = new NicknameService();
-
-
+?>

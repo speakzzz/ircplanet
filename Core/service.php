@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -133,8 +131,9 @@
 			if ($this->sock)
 				$this->close();
 			
-			if ($this->db)
-				mysql_close($this->db);
+			if ($this->db) {
+				$this->db = null;
+			}
 			
 			$this->serviceDestruct();
 		}
@@ -142,19 +141,23 @@
 		
 		function db_connect()
 		{
-			if ($this->db > 0) {
-				mysql_close();
-				$this->db = 0;
+			if (isset($GLOBALS['pdo_db'])) {
+				$GLOBALS['pdo_db'] = null;
 			}
 
-			if (!($this->db = @mysql_connect(DB_HOST, DB_USER, DB_PASS))) {
-				debug("MySQL Error: ". mysql_error());
-				debug("Cannot run without a database!");
-				exit();
-			}
-			
-			if (!mysql_select_db(DB_NAME)) {
-				debug("MySQL Error: ". mysql_error());
+			try {
+				$dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+				$options = [
+					PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+					PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+					PDO::ATTR_EMULATE_PREPARES   => false,
+				];
+				
+				$GLOBALS['pdo_db'] = new PDO($dsn, DB_USER, DB_PASS, $options);
+				$this->db = $GLOBALS['pdo_db'];
+				
+			} catch (PDOException $e) {
+				debug("MySQL Error: ". $e->getMessage());
 				debug("Cannot run without a database!");
 				exit();
 			}
@@ -216,12 +219,15 @@
 		{
 			$n = 0;
 			$res = db_query('select * from accounts order by lower(name) asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$account_key = strtolower($row['name']);
-				$account = new DB_User($row);
-				
-				$this->accounts[$account_key] = $account;
-				$n++;
+			
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$account_key = strtolower($row['name']);
+					$account = new DB_User($row);
+					
+					$this->accounts[$account_key] = $account;
+					$n++;
+				}
 			}
 			
 			debug("Loaded $n account records.");
@@ -230,7 +236,11 @@
 
 		function loadSingleAccount($name_or_id)
 		{
-			$name_or_id = addslashes($name_or_id);
+			if (function_exists('db_escape')) {
+				$name_or_id = db_escape($name_or_id);
+			} else {
+				$name_or_id = addslashes($name_or_id);
+			}
 			
 			if (is_numeric($name_or_id))
 				$criteria = "account_id = '$name_or_id'";
@@ -238,7 +248,8 @@
 				$criteria = "name = '$name_or_id'";
 
 			$res = db_query('select * from accounts where '. $criteria);
-			if ($row = mysql_fetch_assoc($res)) {
+			
+			if ($res && $row = $res->fetch(PDO::FETCH_ASSOC)) {
 				$account_key = strtolower($row['name']);
 				$account = new DB_User($row);
 
@@ -372,6 +383,10 @@
 		
 		function sendf($format)
 		{
+            if (!is_object($this->sock) || !($this->sock instanceof Socket)) {
+                return false;
+            }
+
 			$args = func_get_args();
 			$format = array_shift($args);
 			
@@ -416,7 +431,7 @@
 				$this->sendf(FMT_SERVER, SERVER_NUM,
 					$s->getName(),
 					1,
-					$s->get_start_time(),
+					$s->getStartTs(), 
 					$s->getNumeric(),
 					irc_intToBase64($s->getMaxUsers(), BASE64_MAXUSERLEN),
 					$s->getModes(),
@@ -982,62 +997,92 @@
 			$timeout = 5;
 			$buffer = '';
 			
+			// Define non-critical errors (Success, Resource temp unavailable, Interrupted system call)
 			$noncritical_socket_errors = array(
-				0,    // no error
-				11,   // no data to read (resource temporarily unavailable),
-				35    // no data to read (resource temporarily unavailable - BSD)
+				0,    // Success
+				4,    // EINTR (Interrupted system call)
+				11,   // EAGAIN (Resource temporarily unavailable)
+				35,   // EWOULDBLOCK (BSD)
+				115   // EINPROGRESS
 			);
 			
 			$GLOBALS['INSTANTIATED_SERVICES'][] = $this;
 			
-			while (is_resource($this->sock) && in_array($err_no, $noncritical_socket_errors)) {
+			debug("Entering main loop...");
+			
+			// Modernization: Handle Socket objects in PHP 8+
+			// is_resource($this->sock) will fail in PHP 8 if $this->sock is an object.
+			while ($this->sock) {
 				$iter++;
 				
+				// Calculate timeout for next timer
 				$timeout = 5;
 				foreach ($this->timers as $n => $timer) {
 					$secs_til_run = $timer->getNextRun() - time();
 					if ($timeout > $secs_til_run && $secs_til_run >= 0)
 						$timeout = $timer->getNextRun() - time();
-
-					// debug("Timer {$timer->include_file} has {$timeout} seconds left");
 				}
 				
 				socket_set_option($this->sock, SOL_SOCKET, SO_RCVTIMEO, array("sec" => $timeout, "usec" => 0));
-				socket_set_option($this->sock, SOL_SOCKET, SO_SNDTIMEO, array("sec" => $timeout, "usec" => 0));
 				
 				$this->servicePreread();
-				$buffer .= @socket_read($this->sock, 1024);
-				$this->bytes_received += strlen($buffer);
 				
+				// Read from socket - PHP_BINARY_READ ensures we get raw bytes
+				$read = @socket_read($this->sock, 2048, PHP_BINARY_READ);
+				
+				if ($read === false) {
+					$err_no = socket_last_error($this->sock);
+					$err_str = socket_strerror($err_no);
+					
+					// If error is NOT in non-critical list, break loop
+					if (!in_array($err_no, $noncritical_socket_errors)) {
+						debug("CRITICAL SOCKET ERROR [$err_no]: $err_str");
+						break;
+					}
+					// Clear non-critical error
+					socket_clear_error($this->sock);
+				}
+				elseif ($read === "") {
+					// Empty string on blocking socket means EOF (Remote Disconnect)
+					debug("DISCONNECT: Remote host closed the connection (EOF).");
+					break;
+				}
+				else {
+					// We got data!
+					$buffer .= $read;
+					$this->bytes_received += strlen($read);
+				}
+				
+				// Process Timers
 				$break_time = time();
 				foreach ($this->timers as $n => $timer) {
 					if ($timer->getNextRun() <= $break_time)
 						$this->runTimer($n);
 				}
 				
-				if (!empty($buffer)) {
-					$endpos = strpos($buffer, "\n");
+				// Process Buffer
+				while (($endpos = strpos($buffer, "\n")) !== false) {
+                    // FIX: Check if socket is valid before processing (in case it closed)
+                    if (!$this->sock instanceof Socket) {
+                        break 2;
+                    }
+
+					$line = substr($buffer, 0, $endpos);
+					// Handle potential carriage returns
+					$line = rtrim($line, "\r");
+					$buffer = substr($buffer, $endpos + 1);
 					
-					while ($endpos !== false) {
-						$line = substr($buffer, 0, $endpos - 1);
-						$buffer = substr($buffer, $endpos + 1);
-						
+					if (!empty($line)) {
 						if (!preg_match("/^.. [GZ] /", $line))
 							debug("[RECV] $line");
 						
 						$this->parse($line);
 						$this->lines_received++;
-						
-						$endpos = strpos($buffer, "\n");
 					}
-				}
-				else {
-					$err_no = socket_last_error($this->sock);
-					$err_str = socket_strerror($err_no);
 				}
 			}
 			
-			debug("SOCKET STATUS [$err_no]: $err_str");
+			debug("Service main loop terminated.");
 		}
 		
 		
@@ -1098,16 +1143,14 @@
 		/**
 		 * cleanModes: Returns a clean and parsed version of the MODE string passed
 		 * in the first argument.
-		 * 
-		 * This method does NOT parse a full MODE line; only a channel mode string line
+		 * * This method does NOT parse a full MODE line; only a channel mode string line
 		 * that is structured like so:
-		 *     +ntxyzkl key limit
+		 * +ntxyzkl key limit
 		 * Then, returns a cleaned string with valid and accepted modes:
-		 *     +ntkl key limit
+		 * +ntkl key limit
 		 * If $accept_user_modes is set to true, it will not remove any +o/+v/+b mode
 		 * changes. Otherwise, they will be cleansed.
-		 * 
-		 * This is currently useful for services which accept a mode change from users,
+		 * * This is currently useful for services which accept a mode change from users,
 		 * but where a subset of modes should not be accepted; for instance, setting the
 		 * default mode string on a registered channel in the channel service. In such 
 		 * a case, you wouldn't want users setting -R, -A, -o CS, and so on.
@@ -1126,7 +1169,7 @@
 			}
 			
 			$in_arg = 0;
-			$in_args = split(' ', $modes);
+			$in_args = explode(' ', $modes);
 			if (count($in_args) > 1) {
 				$modes = array_shift($in_args);
 			}
@@ -1271,7 +1314,12 @@
 							$chan->removeOp($numeric);
 
 						$user = $this->getUser($numeric);
-						$readable_args[] = $user->getNick();
+                        // FIX: Check if user exists before accessing getNick()
+                        if ($user) {
+    						$readable_args[] = $user->getNick();
+                        } else {
+                            $readable_args[] = $numeric; // Fallback
+                        }
 					} 
 					elseif ($mode == 'v') {
 						$numeric = $args[$mode_arg++];
@@ -1281,7 +1329,12 @@
 							$chan->removeVoice($numeric);
 
 						$user = $this->getUser($numeric);
-						$readable_args[] = $user->getNick();
+                        // FIX: Check if user exists before accessing getNick()
+                        if ($user) {
+    						$readable_args[] = $user->getNick();
+                        } else {
+                            $readable_args[] = $numeric; // Fallback
+                        }
 					}
 					elseif ($mode == 'b') {
 						$mask = $args[$mode_arg++];
@@ -1336,17 +1389,14 @@
 		 * one or several different mode change strings if it exceeds the maximum
 		 * number of mode changes per line. This rule does not apply to user mode
 		 * changes, only channel mode changes.
-		 * 
-		 * For instance, the following changes would be sent:
-		 *      In:   AEBIm M brian :+owg
-		 *      Out:  AEBIm M brian :+owg
-		 * 
-		 *      In:   AEBIm M #dev +ntooovvv AEBf6 AEBf7 AEBf8 AEBf9 AEBfa Cm6Dq 112603551
-		 *      Out:  AEBIm M #dev +ntooov AEBf6 AEBf7 AEBf8 AEBf9 112603551
-		 *            AEBIm M #dev +vv AEBfa CM6Dq
-		 * 
-		 *            Note that two lines are actually sent here, since ircu limits
-		 *            mode changes to six per line.
+		 * * For instance, the following changes would be sent:
+		 * In:   AEBIm M brian :+owg
+		 * Out:  AEBIm M brian :+owg
+		 * * In:   AEBIm M #dev +ntooovvv AEBf6 AEBf7 AEBf8 AEBf9 AEBfa Cm6Dq 112603551
+		 * Out:  AEBIm M #dev +ntooov AEBf6 AEBf7 AEBf8 AEBf9 112603551
+		 * AEBIm M #dev +vv AEBfa CM6Dq
+		 * * Note that two lines are actually sent here, since ircu limits
+		 * mode changes to six per line.
 		 */
 		function sendModeLine($proto_str)
 		{
@@ -1383,9 +1433,13 @@
 					}
 					
 					if (++$mode_count == MAX_MODES_PER_LINE || $i == strlen($modes) - 1) {
-						$outgoing[] = irc_sprintf("%s M %s %s%s%A", $source, $target, $tmp_modes, 
-							count($tmp_args) > 0 ? ' ' : '', 
-							$tmp_args);
+                        // FIX: Manually flatten array args to avoid using %A specifier
+                        $flat_args = count($tmp_args) > 0 ? implode(' ', $tmp_args) : '';
+                        $spacing = count($tmp_args) > 0 ? ' ' : '';
+
+						$outgoing[] = irc_sprintf("%s M %s %s%s%s", $source, $target, $tmp_modes, 
+							$spacing, 
+							$flat_args);
 						$mode_count = 0;
 						$tmp_modes = $tmp_pol;
 						$tmp_args = array();
@@ -1488,23 +1542,36 @@
 		
 		function performChanUserMode($source_num, $chan_name, $mode_pol, $mode_char, $arg_list)
 		{
-			$args = array();
 			$chan = $this->getChannel($chan_name);
 			
 			if (!$chan)
 				return;
 			
+			// Normalize $arg_list to a flat array of strings
 			if (!is_array($arg_list)) {
-				$arg_list = array();
-				$arg_count = func_num_args();
-
-				for ($i = 4; $i < $arg_count; ++$i)
-					$arg_list[] = func_get_arg($i);
+				$arg_list = array($arg_list);
 			}
+            
+            // Ensure no nested arrays exist (flatten just in case)
+            $flat_list = array();
+            foreach ($arg_list as $arg) {
+                if (is_array($arg)) {
+                    $flat_list[] = implode('', $arg); 
+                } else {
+                    $flat_list[] = (string)$arg;
+                }
+            }
 
-			$mode_str = $mode_pol . str_repeat($mode_char, count($arg_list));
-			$mode_args = implode(' ', $arg_list);
-			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
+			$mode_args = implode(' ', $flat_list);
+			$mode_str = $mode_pol . str_repeat($mode_char, count($flat_list));
+            
+            // Cast other args to string explicitly
+            $src = (string)$source_num;
+            $chn = (string)$chan->getName();
+            $ts = (int)$chan->getTs();
+			
+			// Use %s explicitly to avoid %A confusion
+			$mode_line = irc_sprintf(FMT_MODE_HACK, $src, $chn, $mode_str, $mode_args, $ts);
 			return $this->sendModeLine($mode_line);
 		}
 		
@@ -1595,11 +1662,30 @@
 				return;
 
 			$command = array_shift($args);
+			$cmd_lower = strtolower($command);
+			
+			// Security: Redact passwords from logs
+			if ($cmd_lower == 'login') {
+				if (count($args) > 1) $args[1] = '********'; // login <user> <pass>
+				else if (count($args) > 0) $args[0] = '********'; // login <pass>
+			}
+			elseif ($cmd_lower == 'register') {
+				if (count($args) > 0) $args[0] = '********'; // register <pass> <email>
+			}
+			elseif ($cmd_lower == 'newpass') {
+				if (count($args) > 0) $args[0] = '********'; // newpass <pass>
+			}
+			elseif ($cmd_lower == 'ghost') {
+				if (count($args) > 1) $args[1] = '********'; // ghost <nick> <pass>
+			}
+			elseif ($cmd_lower == 'set' && count($args) > 1 && strtolower($args[0]) == 'password') {
+				$args[1] = '********'; // set password <pass>
+			}
+
 			$log_msg = irc_sprintf('[%'. NICK_LEN .'H] %s%s%s %A',
 				$user, BOLD_START, $command, BOLD_END, $args);
 
 			$this->default_bot->message(COMMAND_CHANNEL, $log_msg);
 		}
 	}
-	
-
+?>

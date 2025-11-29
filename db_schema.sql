@@ -25,7 +25,7 @@ DROP TABLE IF EXISTS `accounts`;
 CREATE TABLE `accounts` (
   `account_id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(20) NOT NULL DEFAULT '',
-  `password` varchar(32) NOT NULL DEFAULT '',
+  `password` varchar(255) NOT NULL DEFAULT '',
   `email` varchar(100) NOT NULL DEFAULT '',
   `info_line` varchar(150) NOT NULL DEFAULT '',
   `fakehost` varchar(100) NOT NULL,

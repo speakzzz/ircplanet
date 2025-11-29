@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -81,10 +79,16 @@
 	{
 		$ex_pos = strpos($mask, '!');
 		$at_pos = strpos($mask, '@');
-		$ident = substr($mask, $ex_pos + 1, $at_pos - $ex_pos - 1);
 		
-		if (strlen($ident) > IDENT_LEN) {
-			$mask = substr($mask, 0, $ex_pos) .'!*'. right($ident, IDENT_LEN - 1) . substr($mask, $at_pos);
+		if ($ex_pos === false) $ex_pos = 0;
+		if ($at_pos === false) $at_pos = 0;
+
+		if ($ex_pos > 0 && $at_pos > $ex_pos) {
+			$ident = substr($mask, $ex_pos + 1, $at_pos - $ex_pos - 1);
+			
+			if (strlen($ident) > IDENT_LEN) {
+				$mask = substr($mask, 0, $ex_pos) .'!*'. right($ident, IDENT_LEN - 1) . substr($mask, $at_pos);
+			}
 		}
 		
 		return $mask;
@@ -182,189 +186,101 @@
 	}
 	
 	
-	/**
-	 * irc_sprintf provides a cleaner way of sending services-specific data structures
-	 * to sprintf without having to repeatedly provide long member function calls as 
-	 * sprintf arguments. Since we almost always use the same member functions in
-	 * most scenarios, irc_sprintf does a lot of legwork and makes for cleaner code.
-	 *
-	 * The custom conversion specifiers that can be used with irc_sprintf follow:
-	 * 
-	 *  %A    A space-delimited string representing all of an array's elements.
-	 *        Designed for string or numeric arrays only.
-	 *  
-	 *  %H    Human-readable name of the referenced object.
-	 *        For channels:  channel name.
-	 *        For servers:   full server name.
-	 *        For users:     nick name.
-	 *        For bots:      nick name.
-	 *        For glines:    the full mask of the gline.
-	 *  
-	 *  %C    Same as %H. Pneumonically represents channel names; provided as an extra
-	 *        flag only for readability in longer format strings.
-	 *  
-	 *  %N    The ircu numeric of the referenced object.
-	 *        For servers:   two-character server numeric (ex., Sc).
-	 *        For users:     five-character server+user numeric (ex., ScAAA).
-	 *        For bots:      five-character server+user numeric (ex., ScAAA).
-	 *  
-	 *  %U    The account name of the referenced object.
-	 *        For users:     user's logged-in account name, if any.
-	 *        For accounts:  account name.
-	 *  
-	 * Examples:
-	 *    sprintf('%s', $user_obj->getNick());    // Nick name
-	 *    irc_sprintf('%H', $user_obj);            // Nick name
-	 *    irc_sprintf('[%'#-13H]', $user_obj);     // Nick name, left-aligned in brackets
-	 *                                                and padded with hash symbols
-	 *  
-	 * The following are totally equivalent; the latter saves much space and provides
-	 * visual feedback as to what each argument corresponds to (numeric, channel, etc):
-	 *    
-	 *    sprintf('%s M %s +o %s %ld', $user_obj->getNumeric(), $chan_obj->getName, 
-	 *            $user2_obj->getNumeric(), time());
-	 *    
-	 *    irc_sprintf('%N M %C +o %N %ld', $user_obj, $chan_obj, $user2_obj, time());
-	 * 
-	 */
 	function irc_sprintf($format)
 	{
-		$args = func_get_args(); // Get array of all function arguments for vsprintf
-		array_shift($args);    // Pop the format argument from the top
-		
+		$args = func_get_args(); 
+		array_shift($args); 
 		return irc_vsprintf($format, $args);
 	}
 	
 	/**
-	 * irc_vsprintf: Identical to vsprintf, except extended to allow the IRC-specific
-	 * conversion specifiers documented with irc_sprintf.
+	 * irc_vsprintf: Modern implementation using callbacks to handle custom specifiers safely.
 	 */ 
 	function irc_vsprintf($format, $args)
 	{
-		$std_types = 'bcdeufFosxX';
-		$custom_types = 'ACHNU';
+		// Track the current argument index
+		$arg_idx = 0;
 
-		$len = strlen($format);
-		$arg_index = -1;
-		$pct_count = 0;
+		$callback = function($matches) use (&$args, &$arg_idx) {
+			// $matches[0] is the full specifier (e.g. "%-10s" or "%A")
+			// $matches[1] is the type char (e.g. "s" or "A")
 
-		for ($i = 0; $i < $len - 1; $i++) {
-			$char = $format[$i];
-			$next = $format[$i + 1];
+			if (!isset($matches[1])) return $matches[0];
+			
+			if ($matches[1] == '%') return '%';
 
-			if ($char == '%')
-				$pct_count++;
-			else
-				$pct_count = 0;
-
-			/**
-			 * Skip this character if we don't have the start of a spec yet, or
-			 * if we do and the following character is a '%', indicating that
-			 * vsprintf will simply substitute a percent sign.
-			 */
-			if ($pct_count != 1 || $next == '%')
-				continue;
-
-			// Found a spec; hold its place
-			$spec_start = $i;
-			$spec_end = $i + 1;
-			$type = '';
-
-			/**
-			 * Loop through the characters immediately following so that we can
-			 * attempt to find the type of spec this is. The formatting flags will
-			 * be preserved, so we'll ignore them.
-			 */
-			for ($j = $i + 1; $j < $len; $j++) {
-				$tmp_char = $format[$j];
-				$is_std_type = (false !== strpos($std_types, $tmp_char));
-				$is_cust_type = (false !== strpos($custom_types, $tmp_char));
-
-				if ($is_std_type || $is_cust_type) {
-					// Found a valid standard or custom flag, mark its place and stop
-					$type = $tmp_char;
-					$arg_index++;
-					$spec_end = $j;
-					break;
-				}
+			if (!array_key_exists($arg_idx, $args)) {
+				return ''; 
 			}
 
-			// If we found a custom type in this spec, process it accordingly
-			if ($is_cust_type) {
-				$arg_obj = $args[$arg_index];
-				$cust_text = '';
+			$arg = $args[$arg_idx++];
+			$type = $matches[1];
+			$full_spec = $matches[0];
 
-				switch ($type) {
-					/**
-					 * %A: Flat array to string conversion
-					 */
-					case 'A':
-						$cust_text = implode(' ', $arg_obj);
-						break;
+            // Helper to safely stringify any value (including Arrays)
+            $stringify = function($val) {
+                if (is_array($val)) return implode(' ', $val);
+                if (is_object($val) && !method_exists($val, '__toString')) return '[Object]';
+                return (string)$val;
+            };
 
+			switch ($type) {
+				case 'A': // Array
+                    $val = is_array($arg) ? implode(' ', $arg) : $stringify($arg);
+					$spec = str_replace('A', 's', $full_spec);
+					return sprintf($spec, $val);
 
-					/**
-					 * %H: Human-readable name of given object
-					 */
-					case 'C':
-					case 'H':
-						if (isUser($arg_obj))
-							$cust_text = $arg_obj->getNick();
-						elseif (isChannel($arg_obj) || isServer($arg_obj))
-							$cust_text = $arg_obj->getName();
-						elseif (isGline($arg_obj))
-							$cust_text = $arg_obj->getMask();
+				case 'C': // Channel/Server/User Name
+				case 'H': 
+					$val = '';
+					if (is_object($arg)) {
+						if (method_exists($arg, 'getNick')) $val = $arg->getNick();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						elseif (method_exists($arg, 'getMask')) $val = $arg->getMask();
+						else $val = $stringify($arg);
+					} else {
+						$val = $stringify($arg);
+					}
+					$spec = str_replace($type, 's', $full_spec);
+					return sprintf($spec, $val);
 
-						break;
+				case 'N': // Numeric
+					$val = '';
+					if (is_object($arg) && method_exists($arg, 'getNumeric')) {
+						$val = $arg->getNumeric();
+					} else {
+						$val = $stringify($arg);
+					}
+					$spec = str_replace('N', 's', $full_spec);
+					return sprintf($spec, $val);
 
+				case 'U': // Account Name
+					$val = '';
+					if (is_object($arg)) {
+						if (method_exists($arg, 'getAccountName')) $val = $arg->getAccountName();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						else $val = $stringify($arg);
+					} else {
+						$val = $stringify($arg);
+					}
+					$spec = str_replace('U', 's', $full_spec);
+					return sprintf($spec, $val);
 
-					/**
-					 * %N: ircu P10 numeric of given object
-					 */
-					case 'N':
-						if (isUser($arg_obj) || isServer($arg_obj))
-							$cust_text = $arg_obj->getNumeric();
-
-						break;
-
-
-					/**
-					 * %U: Account name of user or account object
-					 */
-					case 'U':
-						if (isUser($arg_obj))
-							$cust_text = $arg_obj->getAccountName();
-						elseif (isAccount($arg_obj))
-							$cust_text = $arg_obj->getName();
-
-						break;
-
-
-					/**
-					 * I'm sorry, Dave, I'm afraid I can't do that.
-					 * Will pass this unknown spec to vsprintf as-is.
-					 */
-					default:
-						continue;
-				}
-				
-				/**
-				 * Change the custom flag to an 's' (string) and replace the argument
-				 * with whatever string we determined was most appropriate for it.
-				 */
-				$format[$spec_end] = 's';
-				$args[$arg_index] = $cust_text;
-
-				/**
-				 * No need to look at this entire spec anymore, so advance to the next
-				 * char after the end of the spec.
-				 */
-				$i = $spec_end + 1;
+				default:
+					// Standard specifier. 
+                    // CRITICAL FIX: If arg is array, flatten it to prevent "Array to string conversion" error.
+                    if (is_array($arg)) {
+                        $arg = implode(' ', $arg);
+                    }
+					return sprintf($full_spec, $arg);
 			}
-		}
+		};
 
-		// vsprintf takes care of the standard flags.
-		return vsprintf($format, $args);
+		return preg_replace_callback(
+			'/%(?:[0-9.\-]*)([bcdeufFosxXACHNU%])/', 
+			$callback, 
+			$format
+		);
 	}
 	
 
@@ -386,7 +302,4 @@
 		$index = rand(0, count($ban_reasons) - 1);
 		return $ban_reasons[$index];
 	}
-
-	
-
-
+?>

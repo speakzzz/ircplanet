@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -55,13 +53,16 @@
 					$row = $id;
 				}
 				else {
+					// Modernization: Escape ID
+					$safe_id = db_escape($id);
 					$res = db_query(
 						"select * ".
 						"from `$this->_table_name` ".
-						"where `$this->_key_field` = '$id'");
+						"where `$this->_key_field` = '$safe_id'");
 					
-					if ($res && mysql_num_rows($res) == 1)
-						$row = mysql_fetch_assoc($res);
+					// Modernization: Use rowCount() and fetch()
+					if ($res && $res->rowCount() == 1)
+						$row = $res->fetch(PDO::FETCH_ASSOC);
 					else
 						return false;
 				}
@@ -76,7 +77,9 @@
 			if (!method_exists($this, 'recordDestruct'))
 				die("Cannot find the ". get_class($this) ." record destructor (recordDestruct).");
 			
-			$this->recordConstruct(func_get_args());
+			// Modernization: Pass arguments correctly
+			$args = func_get_args();
+			$this->recordConstruct($args);
 		}
 		
 		
@@ -131,16 +134,20 @@
 			if (empty($this->_update_timestamp_field))
 				return false;
 			
+			$id = db_escape($this->getKeyValue());
+			
 			$res = db_query(
 				"select `$this->_update_timestamp_field` ".
 				"from `$this->_table_name` ".
 				"where `$this->_key_field` = '$id'");
 			
-			if (!$res || mysql_num_rows($res) != 1)
+			// Modernization: Use rowCount()
+			if (!$res || $res->rowCount() != 1)
 				return false;
 			
 			$old_ts = $this->getUpdateTs();
-			$new_ts = mysql_result($res, 1);
+			// Modernization: Use fetchColumn() instead of mysql_result
+			$new_ts = $res->fetchColumn(0);
 			
 			$child_refresh = true;
 			if (method_exists($this, 'record_needsRefresh'))
@@ -148,6 +155,8 @@
 			
 			if ($new_ts > $old_ts)
 				return (true && $child_refresh);
+			
+			return false;
 		}
 		
 		
@@ -180,7 +189,8 @@
 					if (!empty($list))
 						$list .= ', ';
 					
-					$list .= "`$field` = '". addslashes($value) ."'";
+					// Modernization: Use db_escape
+					$list .= "`$field` = '". db_escape($value) ."'";
 				}
 			}
 			
@@ -216,7 +226,8 @@
 					if (!empty($list))
 						$list .= ', ';
 					
-					$list .= "'". addslashes($value) ."'";
+					// Modernization: Use db_escape
+					$list .= "'". db_escape($value) ."'";
 				}
 			}
 			
@@ -243,11 +254,13 @@
 				
 				db_query("insert into `$this->_table_name` ($fields) values ($values)");
 				
-				$this->$key_name = mysql_insert_id();
+				// Modernization: Use PDO lastInsertId
+				$this->$key_name = $GLOBALS['pdo_db']->lastInsertId();
 				$this->_recordExists = true;
 			}
 			else {
-				$key_value = addslashes($this->getKeyValue());
+				// Modernization: Use db_escape
+				$key_value = db_escape($this->getKeyValue());
 				$fields = $this->getUpdateFieldlist();
 				$u_field = $this->_update_timestamp_field;
 
@@ -271,16 +284,19 @@
 		
 		function refresh()
 		{
-			$id = $this->getKeyValue();
+			// Modernization: db_escape
+			$id = db_escape($this->getKeyValue());
 			$res = db_query(
 				"select * ".
 				"from `$this->_table_name` ".
 				"where `$this->_key_field` = '$id'");
 			
-			if (!$res || mysql_num_rows($res) != 1)
+			// Modernization: Use rowCount()
+			if (!$res || $res->rowCount() != 1)
 				return false;
 			
-			$row = mysql_fetch_assoc($res);
+			// Modernization: Use fetch()
+			$row = $res->fetch(PDO::FETCH_ASSOC);
 			$this->loadFromRow($row);
 			
 			if (method_exists($this, 'record_refresh'))
@@ -297,8 +313,11 @@
 		function delete()
 		{
 			$key_value = $this->getKeyValue();
-			if ($key_value != 0)
-				db_query("delete from `$this->_table_name` where `$this->_key_field` = '$key_value'");
+			if ($key_value != 0) {
+				// Modernization: Escape the key value just in case
+				$safe_key = db_escape($key_value);
+				db_query("delete from `$this->_table_name` where `$this->_key_field` = '$safe_key'");
+			}
 			
 			$this->_recordExists = false;
 			
@@ -306,5 +325,4 @@
 				$this->recordDelete();
 		}
 	}
-	
-
+?>
