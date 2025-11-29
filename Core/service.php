@@ -383,7 +383,6 @@
 		
 		function sendf($format)
 		{
-            // FIX: Check if socket is valid before writing
             if (!is_object($this->sock) || !($this->sock instanceof Socket)) {
                 return false;
             }
