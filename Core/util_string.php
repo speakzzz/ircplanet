@@ -3,28 +3,6 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions are met:
-
- * 1. Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- * 3. Neither the name of ircPlanet nor the names of its contributors may be
- * used to endorse or promote products derived from this software without 
- * specific prior written permission.
- * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 	
 	function right($str, $len)
@@ -180,53 +158,14 @@
 	}
 	
 	
-	/**
-	 * irc_sprintf provides a cleaner way of sending services-specific data structures
-	 * to sprintf without having to repeatedly provide long member function calls as 
-	 * sprintf arguments. Since we almost always use the same member functions in
-	 * most scenarios, irc_sprintf does a lot of legwork and makes for cleaner code.
-	 *
-	 * The custom conversion specifiers that can be used with irc_sprintf follow:
-	 * * %A    A space-delimited string representing all of an array's elements.
-	 * Designed for string or numeric arrays only.
-	 * * %H    Human-readable name of the referenced object.
-	 * For channels:  channel name.
-	 * For servers:   full server name.
-	 * For users:     nick name.
-	 * For bots:      nick name.
-	 * For glines:    the full mask of the gline.
-	 * * %C    Same as %H. Pneumonically represents channel names; provided as an extra
-	 * flag only for readability in longer format strings.
-	 * * %N    The ircu numeric of the referenced object.
-	 * For servers:   two-character server numeric (ex., Sc).
-	 * For users:     five-character server+user numeric (ex., ScAAA).
-	 * For bots:      five-character server+user numeric (ex., ScAAA).
-	 * * %U    The account name of the referenced object.
-	 * For users:     user's logged-in account name, if any.
-	 * For accounts:  account name.
-	 * * Examples:
-	 * sprintf('%s', $user_obj->getNick());    // Nick name
-	 * irc_sprintf('%H', $user_obj);            // Nick name
-	 * irc_sprintf('[%'#-13H]', $user_obj);     // Nick name, left-aligned in brackets
-	 * and padded with hash symbols
-	 * * The following are totally equivalent; the latter saves much space and provides
-	 * visual feedback as to what each argument corresponds to (numeric, channel, etc):
-	 * * sprintf('%s M %s +o %s %ld', $user_obj->getNumeric(), $chan_obj->getName, 
-	 * $user2_obj->getNumeric(), time());
-	 * * irc_sprintf('%N M %C +o %N %ld', $user_obj, $chan_obj, $user2_obj, time());
-	 * */
 	function irc_sprintf($format)
 	{
-		$args = func_get_args(); // Get array of all function arguments for vsprintf
-		array_shift($args);    // Pop the format argument from the top
+		$args = func_get_args(); 
+		array_shift($args); 
 		
 		return irc_vsprintf($format, $args);
 	}
 	
-	/**
-	 * irc_vsprintf: Identical to vsprintf, except extended to allow the IRC-specific
-	 * conversion specifiers documented with irc_sprintf.
-	 */ 
 	function irc_vsprintf($format, $args)
 	{
 		$std_types = 'bcdeufFosxX';
@@ -245,31 +184,19 @@
 			else
 				$pct_count = 0;
 
-			/**
-			 * Skip this character if we don't have the start of a spec yet, or
-			 * if we do and the following character is a '%', indicating that
-			 * vsprintf will simply substitute a percent sign.
-			 */
 			if ($pct_count != 1 || $next == '%')
 				continue;
 
-			// Found a spec; hold its place
 			$spec_start = $i;
 			$spec_end = $i + 1;
 			$type = '';
 
-			/**
-			 * Loop through the characters immediately following so that we can
-			 * attempt to find the type of spec this is. The formatting flags will
-			 * be preserved, so we'll ignore them.
-			 */
 			for ($j = $i + 1; $j < $len; $j++) {
 				$tmp_char = $format[$j];
 				$is_std_type = (false !== strpos($std_types, $tmp_char));
 				$is_cust_type = (false !== strpos($custom_types, $tmp_char));
 
 				if ($is_std_type || $is_cust_type) {
-					// Found a valid standard or custom flag, mark its place and stop
 					$type = $tmp_char;
 					$arg_index++;
 					$spec_end = $j;
@@ -277,23 +204,17 @@
 				}
 			}
 
-			// If we found a custom type in this spec, process it accordingly
 			if ($is_cust_type) {
-				$arg_obj = $args[$arg_index];
+				$arg_obj = isset($args[$arg_index]) ? $args[$arg_index] : null;
 				$cust_text = '';
 
 				switch ($type) {
-					/**
-					 * %A: Flat array to string conversion
-					 */
 					case 'A':
-						$cust_text = implode(' ', $arg_obj);
+						if (is_array($arg_obj)) $cust_text = implode(' ', $arg_obj);
+						else $cust_text = (string)$arg_obj;
 						break;
 
 
-					/**
-					 * %H: Human-readable name of given object
-					 */
 					case 'C':
 					case 'H':
 						if (isUser($arg_obj))
@@ -306,9 +227,6 @@
 						break;
 
 
-					/**
-					 * %N: ircu P10 numeric of given object
-					 */
 					case 'N':
 						if (isUser($arg_obj) || isServer($arg_obj))
 							$cust_text = $arg_obj->getNumeric();
@@ -316,9 +234,6 @@
 						break;
 
 
-					/**
-					 * %U: Account name of user or account object
-					 */
 					case 'U':
 						if (isUser($arg_obj))
 							$cust_text = $arg_obj->getAccountName();
@@ -327,31 +242,16 @@
 
 						break;
 
-
-					/**
-					 * I'm sorry, Dave, I'm afraid I can't do that.
-					 * Will pass this unknown spec to vsprintf as-is.
-					 */
 					default:
 						continue 2;
 				}
 				
-				/**
-				 * Change the custom flag to an 's' (string) and replace the argument
-				 * with whatever string we determined was most appropriate for it.
-				 */
 				$format[$spec_end] = 's';
 				$args[$arg_index] = $cust_text;
-
-				/**
-				 * No need to look at this entire spec anymore, so advance to the next
-				 * char after the end of the spec.
-				 */
 				$i = $spec_end + 1;
 			}
 		}
 
-		// vsprintf takes care of the standard flags.
 		return vsprintf($format, $args);
 	}
 	
@@ -374,3 +274,4 @@
 		$index = rand(0, count($ban_reasons) - 1);
 		return $ban_reasons[$index];
 	}
+?>
