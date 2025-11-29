@@ -513,10 +513,8 @@
 			 * but not impossible.
 			 */
 			$blacklists = array(
-				'tor.dnsbl.sectoor.de' => array(1),
 				'tor.dan.me.uk'        => array(100),
-				'tor.ahbl.org'         => array(2)
-			);
+				);
 
 			foreach ($blacklists as $dns_suffix => $responses) {
 				if ($this->isBlacklistedDns($host, $dns_suffix, $responses))
