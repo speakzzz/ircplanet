@@ -993,71 +993,85 @@
 			$timeout = 5;
 			$buffer = '';
 			
+			// Define non-critical errors (Success, Resource temp unavailable, Interrupted system call)
 			$noncritical_socket_errors = array(
-				0,    // no error
-				11,   // no data to read (resource temporarily unavailable),
-				35    // no data to read (resource temporarily unavailable - BSD)
+				0,    // Success
+				4,    // EINTR (Interrupted system call)
+				11,   // EAGAIN (Resource temporarily unavailable)
+				35,   // EWOULDBLOCK (BSD)
+				115   // EINPROGRESS
 			);
 			
 			$GLOBALS['INSTANTIATED_SERVICES'][] = $this;
 			
-			while (is_resource($this->sock) && in_array($err_no, $noncritical_socket_errors)) {
+			debug("Entering main loop...");
+			
+			while (is_resource($this->sock)) {
 				$iter++;
 				
+				// Calculate timeout for next timer
 				$timeout = 5;
 				foreach ($this->timers as $n => $timer) {
 					$secs_til_run = $timer->getNextRun() - time();
 					if ($timeout > $secs_til_run && $secs_til_run >= 0)
 						$timeout = $timer->getNextRun() - time();
-
-					// debug("Timer {$timer->include_file} has {$timeout} seconds left");
 				}
 				
 				socket_set_option($this->sock, SOL_SOCKET, SO_RCVTIMEO, array("sec" => $timeout, "usec" => 0));
-				socket_set_option($this->sock, SOL_SOCKET, SO_SNDTIMEO, array("sec" => $timeout, "usec" => 0));
 				
 				$this->servicePreread();
 				
-				// FIX: Check for remote disconnect (EOF)
-				$read = @socket_read($this->sock, 1024);
+				// Read from socket
+				$read = @socket_read($this->sock, 2048, PHP_BINARY_READ);
 				
-				if ($read === "") {
-					debug("ERROR: Remote host closed the connection.");
-					break; // Exit the main loop
+				if ($read === false) {
+					$err_no = socket_last_error($this->sock);
+					$err_str = socket_strerror($err_no);
+					
+					// If error is NOT in non-critical list, break loop
+					if (!in_array($err_no, $noncritical_socket_errors)) {
+						debug("CRITICAL SOCKET ERROR [$err_no]: $err_str");
+						break;
+					}
+					// Clear non-critical error
+					socket_clear_error($this->sock);
+				}
+				elseif ($read === "") {
+					// Empty string on blocking socket means EOF (Remote Disconnect)
+					debug("DISCONNECT: Remote host closed the connection (EOF).");
+					break;
+				}
+				else {
+					// We got data!
+					$buffer .= $read;
+					$this->bytes_received += strlen($read);
 				}
 				
-				$buffer .= $read;
-				$this->bytes_received += strlen($read);
-				
+				// Process Timers
 				$break_time = time();
 				foreach ($this->timers as $n => $timer) {
 					if ($timer->getNextRun() <= $break_time)
 						$this->runTimer($n);
 				}
 				
-				if (!empty($buffer)) {
-					$endpos = strpos($buffer, "\n");
+				// Process Buffer
+				while (($endpos = strpos($buffer, "\n")) !== false) {
+					$line = substr($buffer, 0, $endpos);
+					// Handle potential carriage returns
+					$line = rtrim($line, "\r");
+					$buffer = substr($buffer, $endpos + 1);
 					
-					while ($endpos !== false) {
-						$line = substr($buffer, 0, $endpos - 1);
-						$buffer = substr($buffer, $endpos + 1);
-						
+					if (!empty($line)) {
 						if (!preg_match("/^.. [GZ] /", $line))
 							debug("[RECV] $line");
 						
 						$this->parse($line);
 						$this->lines_received++;
-						
-						$endpos = strpos($buffer, "\n");
 					}
-				}
-				else {
-					$err_no = socket_last_error($this->sock);
-					$err_str = socket_strerror($err_no);
 				}
 			}
 			
-			debug("SOCKET STATUS [$err_no]: $err_str");
+			debug("Service main loop terminated.");
 		}
 		
 		
