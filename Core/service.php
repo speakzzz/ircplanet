@@ -1539,18 +1539,15 @@
 			if (!$chan)
 				return;
 			
+            // Fix: Simple check. If it's not an array (single user), wrap it.
 			if (!is_array($arg_list)) {
-				$arg_list = array();
-				$arg_count = func_num_args();
-
-				for ($i = 4; $i < $arg_count; ++$i)
-					$arg_list[] = func_get_arg($i);
+				$arg_list = array($arg_list);
 			}
 
-			// FIX: Ensure $arg_list is a string if it is an array
-			$mode_args = is_array($arg_list) ? implode(' ', $arg_list) : $arg_list;
+			// FIX: Ensure $arg_list is a string for irc_sprintf
+			$mode_args = implode(' ', $arg_list);
 
-			$mode_str = $mode_pol . str_repeat($mode_char, count(is_array($arg_list) ? $arg_list : [$arg_list]));
+			$mode_str = $mode_pol . str_repeat($mode_char, count($arg_list));
 			
 			// Use %s instead of %A as we pre-formatted the arguments
 			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
