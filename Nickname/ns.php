@@ -38,6 +38,8 @@
 
 		function serviceConstruct()
 		{
+		// Run every hour (3600 seconds) to clean up old registrations
+	        $this->addTimer(true, 3600, 'expire_registrations.php');
 		}
 		
 		

@@ -27,6 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
+	require_once(CORE_DIR .'/email.php');
+
 	$numeric = $args[0];
 	$user = $this->getUser($numeric);
 	$user_name = $user->getNick();
@@ -35,18 +37,17 @@
 	
 	if (!$user->isLoggedIn()) {
 		if (!isValidEmail($email)) {
-			$bot->notice($user, "You have specified an invalid e-mail address. ".
-				"Please try again.");
+			$bot->notice($user, "You have specified an invalid e-mail address. Please try again.");
 			return false;
 		}
 		
-		if ($account = $this->getAccountByEmail($email)) {
-			$bot->notice($user, "That e-mail address is already associated ".
-				"with a registered nickname.");
+		// Check active accounts for duplications
+		if ($this->getAccountByEmail($email)) {
+			$bot->notice($user, "That e-mail address is already associated with a registered nickname.");
 			return false;
 		}
 		
-		if ($account = $this->getAccount($user_name)) {
+		if ($this->getAccount($user_name)) {
 			$bot->noticef($user,
 				"The nickname %s%s%s has already been registered. Please choose another.",
 				BOLD_START, $user_name, BOLD_END);
@@ -58,31 +59,65 @@
 			return false;
 		}
 		
-		// Modernization: Use password_hash instead of md5
+		// Check for existing pending registration to prevent spam
+		$safe_nick = db_escape($user_name);
+		$res = db_query("SELECT id FROM pending_registers WHERE nickname = '$safe_nick'");
+		if ($res && $res->rowCount() > 0) {
+			$bot->notice($user, "There is already a pending registration for this nickname. Please check your email.");
+			return false;
+		}
+
+		// Generate Verification Data
+		try {
+			$code = strtoupper(bin2hex(random_bytes(3))); // 6 characters
+		} catch (Exception $e) {
+			// Fallback for older PHP versions without random_bytes
+			$code = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
+		}
+
 		$password_hash = password_hash($password, PASSWORD_DEFAULT);
+		$ts = time();
 		
-		$account = new DB_User();
-		$account->setName($user->getNick());
-		$account->setRegisterTs(time());
-		$account->setPassword($password_hash);
-		$account->setEmail($email);
-		$account->setAutoOp(true);
-		$account->setAutoVoice(true);
-		$account->updateLastseen();
-		$account->save();
+		// Prepare Database Values
+		$safe_email = db_escape($email);
+		$safe_pass = db_escape($password_hash);
+		$safe_code = db_escape($code);
 		
-		$this->addAccount($account);
+		// Insert Pending Registration
+		$q = db_query("INSERT INTO pending_registers (nickname, password, email, code, timestamp) 
+		               VALUES ('$safe_nick', '$safe_pass', '$safe_email', '$safe_code', $ts)");
 		
-		if (!$user->hasAccountName()) {
-			$this->sendf(FMT_ACCOUNT, SERVER_NUM, $numeric, $user_name, $account->getRegisterTs());
-			$user->setAccountName($user_name);
-			$user->setAccountId($account->getId());
+		if (!$q) {
+			$bot->notice($user, "An error occurred while processing your registration. Please try again later.");
+			return false;
+		}
+
+		// Prepare Email
+		$mail = new Email();
+		$mail->addAddress($email);
+		$mail->setSubject("Nickname Verification for $user_name");
+		
+		$body = "Hello,\n\n" .
+		        "Someone (hopefully you) requested to register the nickname '$user_name' on " . SERVER_NAME . ".\n\n" .
+		        "To complete your registration, verify your email by typing the following command on IRC:\n" .
+		        "/msg " . $bot->getNick() . " VERIFY $code\n\n" .
+		        "If you did not request this, please ignore this email.";
+		
+		$mail->setBody($body);
+		
+		// Send Email
+		if (!$mail->send()) {
+			$bot->notice($user, "Error sending verification email: " . $mail->getError());
+			// Cleanup the failed pending record
+			db_query("DELETE FROM pending_registers WHERE nickname = '$safe_nick'");
+			return false;
 		}
 		
-		$bot->noticef($user,
-			"Your account, %s%s%s, has been registered. You are now logged in.",
-			BOLD_START, $user_name, BOLD_END);
+		$bot->noticef($user, "A verification code has been emailed to %s.", $email);
+		$bot->noticef($user, "Type %s/msg %s VERIFY <code>%s to complete registration.", 
+			BOLD_START, $bot->getNick(), BOLD_END);
 	}
 	else {
 		$bot->notice($user, "You have already registered your nick and logged in.");
 	}
+?>

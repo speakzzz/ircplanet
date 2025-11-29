@@ -56,5 +56,6 @@
 	$this->setCommandInfo('register',         0,   2, false, '<password> <email>');
 	$this->setCommandInfo('showcommands',     0,   0, false);
 	$this->setCommandInfo('uptime',           0,   0, false);
+	$this->setCommandInfo('verify',		   0,  1, false, '<code>');
 
 

@@ -45,26 +45,26 @@
 
 class SMTP {
   /**
-   *  SMTP server port
-   *  @var int
+   * SMTP server port
+   * @var int
    */
   public $SMTP_PORT = 25;
 
   /**
-   *  SMTP reply line ending
-   *  @var string
+   * SMTP reply line ending
+   * @var string
    */
   public $CRLF = "\r\n";
 
   /**
-   *  Sets whether debugging is turned on
-   *  @var bool
+   * Sets whether debugging is turned on
+   * @var bool
    */
   public $do_debug;       // the level of debug to perform
 
   /**
-   *  Sets VERP use on/off (default is off)
-   *  @var bool
+   * Sets VERP use on/off (default is off)
+   * @var bool
    */
   public $do_verp = false;
 
@@ -317,10 +317,10 @@ class SMTP {
    * Implements rfc 821: DATA <CRLF>
    *
    * SMTP CODE INTERMEDIATE: 354
-   *     [data]
-   *     <CRLF>.<CRLF>
-   *     SMTP CODE SUCCESS: 250
-   *     SMTP CODE FAILURE: 552,554,451,452
+   * [data]
+   * <CRLF>.<CRLF>
+   * SMTP CODE SUCCESS: 250
+   * SMTP CODE FAILURE: 552,554,451,452
    * SMTP CODE FAILURE: 451,554
    * SMTP CODE ERROR  : 500,501,503,421
    * @access public
@@ -388,7 +388,8 @@ class SMTP {
 
     $max_line_length = 998; // used below; set here for ease in change
 
-    while(list(,$line) = @each($lines)) {
+    // MODERNIZATION: Replaced while(list()=each()) with foreach
+    foreach($lines as $line) {
       $lines_out = null;
       if($line == "" && $in_headers) {
         $in_headers = false;
@@ -417,7 +418,8 @@ class SMTP {
       $lines_out[] = $line;
 
       // send the lines to the server
-      while(list(,$line_out) = @each($lines_out)) {
+      // MODERNIZATION: Replaced while(list()=each()) with foreach
+      foreach($lines_out as $line_out) {
         if(strlen($line_out) > 0)
         {
           if(substr($line_out, 0, 1) == ".") {
