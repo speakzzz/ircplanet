@@ -383,6 +383,11 @@
 		
 		function sendf($format)
 		{
+            // FIX: Check if socket is valid before writing
+            if (!is_object($this->sock) || !($this->sock instanceof Socket)) {
+                return false;
+            }
+
 			$args = func_get_args();
 			$format = array_shift($args);
 			
@@ -1058,6 +1063,11 @@
 				
 				// Process Buffer
 				while (($endpos = strpos($buffer, "\n")) !== false) {
+                    // FIX: Check if socket is valid before processing (in case it closed)
+                    if (!$this->sock instanceof Socket) {
+                        break 2;
+                    }
+
 					$line = substr($buffer, 0, $endpos);
 					// Handle potential carriage returns
 					$line = rtrim($line, "\r");
@@ -1539,15 +1549,18 @@
 			if (!$chan)
 				return;
 			
-            // Fix: Simple check. If it's not an array (single user), wrap it.
 			if (!is_array($arg_list)) {
-				$arg_list = array($arg_list);
+				$arg_list = array();
+				$arg_count = func_num_args();
+
+				for ($i = 4; $i < $arg_count; ++$i)
+					$arg_list[] = func_get_arg($i);
 			}
 
-			// FIX: Ensure $arg_list is a string for irc_sprintf
-			$mode_args = implode(' ', $arg_list);
+			// FIX: Ensure $arg_list is a string if it is an array
+			$mode_args = is_array($arg_list) ? implode(' ', $arg_list) : $arg_list;
 
-			$mode_str = $mode_pol . str_repeat($mode_char, count($arg_list));
+			$mode_str = $mode_pol . str_repeat($mode_char, count(is_array($arg_list) ? $arg_list : [$arg_list]));
 			
 			// Use %s instead of %A as we pre-formatted the arguments
 			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
