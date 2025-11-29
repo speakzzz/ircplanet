@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -37,9 +35,15 @@
 		$help_level = $this->getCommandLevel($help_topic);
 	}
 	
-	$res = db_query("select text from help where service = 'NS' and topic = '$help_topic' and minlevel <= $user_level");
-	if ($res && mysql_num_rows($res) > 0) {
-		$row = mysql_fetch_assoc($res);
+	// Modernization: Escape input
+	$safe_topic = db_escape($help_topic);
+	
+	$res = db_query("select text from help where service = 'NS' and topic = '$safe_topic' and minlevel <= $user_level");
+	
+	// Modernization: Use PDO rowCount() instead of mysql_num_rows()
+	if ($res && $res->rowCount() > 0) {
+		// Modernization: Use fetch() instead of mysql_fetch_assoc()
+		$row = $res->fetch(PDO::FETCH_ASSOC);
 		$lines = explode("\n", $row['text']);
 		$spacing = str_repeat(' ', 30 - strlen($help_topic));
 		$help_syntax = $this->getCommandSyntax($help_topic);
@@ -62,5 +66,4 @@
 		$bot->noticef($user, "No help is available for %s%s%s.",
 			BOLD_START, $help_topic, BOLD_END);
 	}
-	
-
+?>
