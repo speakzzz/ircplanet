@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -44,12 +42,16 @@
 		function loadWhitelistEntries()
 		{
 			$res = db_query('select * from ds_whitelist order by whitelist_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$entry = new DB_WhitelistEntry($row);
-				
-				$entry_key = strtolower($entry->getMask());
-				$this->whitelist[$entry_key] = $entry;
-			}
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $entry = new DB_WhitelistEntry($row);
+                    
+                    $entry_key = strtolower($entry->getMask());
+                    $this->whitelist[$entry_key] = $entry;
+                }
+            }
 
 			debugf('Loaded %d whitelist entries.', count($this->whitelist));
 		}
@@ -120,10 +122,18 @@
 				$acct_id = $user_obj->getAccountId();
 			}
 			
-			$res = db_query("select `level` from `ds_admins` where user_id = ". $acct_id);
-			if ($res && mysql_num_rows($res) > 0) {
-				$level = mysql_result($res, 0);
-				mysql_free_result($res);
+            // Modernization: Escape input
+            if (function_exists('db_escape')) {
+                $acct_id = db_escape($acct_id);
+            } else {
+                $acct_id = addslashes($acct_id);
+            }
+
+			$res = db_query("select `level` from `ds_admins` where user_id = '$acct_id'");
+			
+            // Modernization: Use rowCount() and fetchColumn()
+            if ($res && $res->rowCount() > 0) {
+				$level = $res->fetchColumn(0);
 				return $level;
 			}
 			
@@ -181,11 +191,13 @@
 			if (!defined('BLACK_GLINE') || isPrivateIp($ip))
 				return false;
 			
+            // Modernization: Use db_escape instead of addslashes
 			$res = db_query(sprintf(
 					"select count(entry_id) FROM `ds_blacklist` WHERE `ip_address` = '%s'", 
-					addslashes($ip)));
-			if ($res && mysql_result($res, 0) > 0) {
-				mysql_free_result($res);
+					db_escape($ip)));
+            
+            // Modernization: Use fetchColumn()
+			if ($res && $res->fetchColumn(0) > 0) {
 				debugf('IP %s blacklisted by admin.', $ip);
 				return true;
 			}
@@ -197,22 +209,12 @@
 		/**
 		 * isBlacklistedDns is a generic function to provide extensibility
 		 * for easily checking DNS based blacklists. It has three arguments:
-		 * 	host:    The IP address of the host you wish to check.
-		 * 	suffix:    The DNS suffix for the DNSBL service.
-		 *    pos_resp:  An array containing responses that should be considered
-		 * 	           a positive match. If not provided, will assume that ANY
-		 * 	           successful DNS resolution against the DNSBL should be
-		 * 	           considered a positive match.
-		 * 
-		 * For example:
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com')
-		 * 		Returns true if 4.3.2.1.dnsbl.com returns any DNS resolution.
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com', 2)
-		 * 		Returns true if 4.3.2.1.dnsbl.com contains '127.0.0.2' in its 
-		 * 		response.
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com', array(2, 3))
-		 * 		Returns true if 4.3.2.1.dnsbl.com contains either 127.0.0.2 or 
-		 * 		127.0.0.3 in its response.
+		 * host:    The IP address of the host you wish to check.
+		 * suffix:    The DNS suffix for the DNSBL service.
+		 * pos_resp:  An array containing responses that should be considered
+		 * a positive match. If not provided, will assume that ANY
+		 * successful DNS resolution against the DNSBL should be
+		 * considered a positive match.
 		 */
 		function isBlacklistedDns($host, $dns_suffix, $pos_responses = -1)
 		{
@@ -277,22 +279,6 @@
 		
 		function isTorHost($host)
 		{
-			/**
-			 * The TOR DNSBL will return 127.0.0.1 as the address for a host
-			 * if it is a Tor server or exit node, and 127.0.0.2 if the host
-			 * is neither but one exists on the same class C subnet. We don't
-			 * care if there's one on the subnet, only if the host we query
-			 * for is actually a Tor server or exit node.
-			 * 
-			 * For more information on the TOR DNSBL, please see
-			 * http://www.sectoor.de/tor.php.
-			 */
-			
-			/**
-			 * We use multiple Tor DNSBLs because sometimes you'll get a
-			 * false negative if one DNSBL isn't 100% up-to-date. Rare,
-			 * but not impossible.
-			 */
 			$blacklists = array(
 				'tor.dnsbl.sectoor.de' => array(1),
 				'tor.dan.me.uk'        => array(100),
@@ -310,21 +296,10 @@
 		
 		function isCompromisedHost($host)
 		{
-			/**
-			 * To determine if a host is compromised, check a myriad of public
-			 * DNSBL services (some are IRC-centric) to see if they are listed.
-			 */
+            // Removed dead blacklists (ahbl, swiftbl) to prevent mass bans
 			$blacklists = array(
-				'ircbl.ahbl.org'      => array(2),
-				'dnsbl.dronebl.org'   => array(),
-				'dnsbl.proxybl.org'   => array(2),
-				'rbl.efnetrbl.org'    => array(1, 2, 3, 4),
-				'dnsbl.swiftbl.net'   => array(2, 3, 4, 5),
-				'cbl.abuseat.org'     => array(2),
-				'xbl.spamhaus.org'    => array(),
-				'drone.abuse.ch'      => array(2, 3, 4, 5),
-				'httpbl.abuse.ch'     => array(2, 3, 4),
-				'spam.abuse.ch'       => array(2)
+				'dnsbl.dronebl.org'   => array(3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19),
+				'rbl.efnetrbl.org'    => array(1, 2, 3, 4, 5)
 			);
 			
 			foreach ($blacklists as $dns_suffix => $responses) {
@@ -360,5 +335,3 @@
 	}
 	
 	$ds = new DefenseService();
-
-
