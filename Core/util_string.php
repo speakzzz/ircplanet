@@ -205,22 +205,28 @@
 			// $matches[0] is the full specifier (e.g. "%-10s" or "%A")
 			// $matches[1] is the type char (e.g. "s" or "A")
 
-			if (!isset($matches[1])) return $matches[0]; // Safety fall-through
+			if (!isset($matches[1])) return $matches[0];
 			
-			if ($matches[1] == '%') return '%'; // Handle escaped %%
+			if ($matches[1] == '%') return '%';
 
 			if (!array_key_exists($arg_idx, $args)) {
-				return ''; // Missing argument protection
+				return ''; 
 			}
 
 			$arg = $args[$arg_idx++];
 			$type = $matches[1];
 			$full_spec = $matches[0];
 
+            // Helper to safely stringify any value (including Arrays)
+            $stringify = function($val) {
+                if (is_array($val)) return implode(' ', $val);
+                if (is_object($val) && !method_exists($val, '__toString')) return '[Object]';
+                return (string)$val;
+            };
+
 			switch ($type) {
-				case 'A': // Array: implode with spaces
-					$val = is_array($arg) ? implode(' ', $arg) : (string)$arg;
-					// Replace %A with %s in the specifier string so sprintf can handle it
+				case 'A': // Array
+                    $val = is_array($arg) ? implode(' ', $arg) : $stringify($arg);
 					$spec = str_replace('A', 's', $full_spec);
 					return sprintf($spec, $val);
 
@@ -228,17 +234,12 @@
 				case 'H': 
 					$val = '';
 					if (is_object($arg)) {
-						if (method_exists($arg, 'getNick')) {
-							$val = $arg->getNick();
-						} elseif (method_exists($arg, 'getName')) {
-							$val = $arg->getName();
-						} elseif (method_exists($arg, 'getMask')) {
-							$val = $arg->getMask();
-						} else {
-							$val = (string)$arg;
-						}
+						if (method_exists($arg, 'getNick')) $val = $arg->getNick();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						elseif (method_exists($arg, 'getMask')) $val = $arg->getMask();
+						else $val = $stringify($arg);
 					} else {
-						$val = (string)$arg;
+						$val = $stringify($arg);
 					}
 					$spec = str_replace($type, 's', $full_spec);
 					return sprintf($spec, $val);
@@ -248,7 +249,7 @@
 					if (is_object($arg) && method_exists($arg, 'getNumeric')) {
 						$val = $arg->getNumeric();
 					} else {
-						$val = (string)$arg;
+						$val = $stringify($arg);
 					}
 					$spec = str_replace('N', 's', $full_spec);
 					return sprintf($spec, $val);
@@ -256,27 +257,25 @@
 				case 'U': // Account Name
 					$val = '';
 					if (is_object($arg)) {
-						if (method_exists($arg, 'getAccountName')) {
-							$val = $arg->getAccountName();
-						} elseif (method_exists($arg, 'getName')) {
-							$val = $arg->getName();
-						} else {
-							$val = (string)$arg;
-						}
+						if (method_exists($arg, 'getAccountName')) $val = $arg->getAccountName();
+						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						else $val = $stringify($arg);
 					} else {
-						$val = (string)$arg;
+						$val = $stringify($arg);
 					}
 					$spec = str_replace('U', 's', $full_spec);
 					return sprintf($spec, $val);
 
 				default:
-					// Standard specifier, use original arg and spec
+					// Standard specifier. 
+                    // CRITICAL FIX: If arg is array, flatten it to prevent "Array to string conversion" error.
+                    if (is_array($arg)) {
+                        $arg = implode(' ', $arg);
+                    }
 					return sprintf($full_spec, $arg);
 			}
 		};
 
-		// Regex to match printf specifiers: % [flags/width/precision] type
-		// Fixed: Added parentheses around the type part to capture it into matches[1]
 		return preg_replace_callback(
 			'/%(?:[0-9.\-]*)([bcdeufFosxXACHNU%])/', 
 			$callback, 
