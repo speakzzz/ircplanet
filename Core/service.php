@@ -1170,7 +1170,7 @@
 			}
 			
 			$in_arg = 0;
-			$in_args = split(' ', $modes);
+			$in_args = explode(' ', $modes);
 			if (count($in_args) > 1) {
 				$modes = array_shift($in_args);
 			}
