@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -144,21 +142,25 @@
 		function loadGlines()
 		{
 			$res = db_query('select * from os_glines order by gline_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$gline = new DB_Gline($row);
-				
-				if ($gline->isExpired()) {
-					$gline->delete();
-					continue;
-				}
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $gline = new DB_Gline($row);
+                    
+                    if ($gline->isExpired()) {
+                        $gline->delete();
+                        continue;
+                    }
 
-				$gline_key = strtolower($gline->getMask());
-				$this->db_glines[$gline_key] = $gline;
-				
-				$this->addGline($gline->getMask(), $gline->getRemainingSecs(), 
-					$gline->getSetTs(), $gline->getLastMod(), $gline->getLifetime(),
-					$gline->getReason(), $gline->isActive());
-			}
+                    $gline_key = strtolower($gline->getMask());
+                    $this->db_glines[$gline_key] = $gline;
+                    
+                    $this->addGline($gline->getMask(), $gline->getRemainingSecs(), 
+                        $gline->getSetTs(), $gline->getLastMod(), $gline->getLifetime(),
+                        $gline->getReason(), $gline->isActive());
+                }
+            }
 
 			debugf('Loaded %d g-lines.', count($this->db_glines));
 		}
@@ -167,21 +169,25 @@
 		function loadMutes()
 		{
 			$res = db_query('select * from os_mutes order by mute_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$mute = new DB_Mute($row);
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $mute = new DB_Mute($row);
 
-				if ($mute->isExpired()) {
-					$mute->delete();
-					continue;
-				}
+                    if ($mute->isExpired()) {
+                        $mute->delete();
+                        continue;
+                    }
 
-				$mute_key = strtolower($mute->getMask());
-				$this->db_mutes[$mute_key] = $mute;
+                    $mute_key = strtolower($mute->getMask());
+                    $this->db_mutes[$mute_key] = $mute;
 
-				$this->addMute($mute->getMask(), $mute->getRemainingSecs(), 
-					$mute->getSetTs(), $mute->getLastMod(), $mute->getLifetime(), 
-					$mute->getReason(), $mute->isActive());
-			}
+                    $this->addMute($mute->getMask(), $mute->getRemainingSecs(), 
+                        $mute->getSetTs(), $mute->getLastMod(), $mute->getLifetime(), 
+                        $mute->getReason(), $mute->isActive());
+                }
+            }
 
 			debugf('Loaded %d mutes.', count($this->db_mutes));
 		}
@@ -190,21 +196,25 @@
 		function loadJupes()
 		{
 			$res = db_query('select * from os_jupes order by jupe_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$jupe = new DB_Jupe($row);
-				
-				if ($jupe->isExpired()) {
-					$jupe->delete();
-					continue;
-				}
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $jupe = new DB_Jupe($row);
+                    
+                    if ($jupe->isExpired()) {
+                        $jupe->delete();
+                        continue;
+                    }
 
-				$jupe_key = strtolower($jupe->getServer());
-				$this->db_jupes[$jupe_key] = $jupe;
-				
-				$this->addJupe($jupe->getServer(), $jupe->getRemainingSecs(),
-					$jupe->getSetTs(), $jupe->getLastMod(),
-					$jupe->getReason(), $jupe->isActive());
-			}
+                    $jupe_key = strtolower($jupe->getServer());
+                    $this->db_jupes[$jupe_key] = $jupe;
+                    
+                    $this->addJupe($jupe->getServer(), $jupe->getRemainingSecs(),
+                        $jupe->getSetTs(), $jupe->getLastMod(),
+                        $jupe->getReason(), $jupe->isActive());
+                }
+            }
 
 			debugf('Loaded %d jupes.', count($this->db_jupes));
 		}
@@ -213,12 +223,16 @@
 		function loadBadchans()
 		{
 			$res = db_query('select * from os_badchans order by badchan_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$badchan = new DB_BadChan($row);
-				
-				$badchan_key = strtolower($badchan->getMask());
-				$this->db_badchans[$badchan_key] = $badchan;
-			}
+			
+            // Modernization: Use PDO fetch loop
+            if ($res) {
+                while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+                    $badchan = new DB_BadChan($row);
+                    
+                    $badchan_key = strtolower($badchan->getMask());
+                    $this->db_badchans[$badchan_key] = $badchan;
+                }
+            }
 
 			debugf('Loaded %d badchans.', count($this->db_badchans));
 		}
@@ -361,16 +375,16 @@
 			}
 			
 			$db_jupe = new DB_Jupe();
-			$db_jupe->setTs($jupe->getSetTs());
-			$db_jupe->setLastMod($jupe->getLastMod());
-			$db_jupe->setServer($jupe->getServer());
-			$db_jupe->setDuration($jupe->getDuration());
-			$db_jupe->setReason($jupe->getReason());
-			$db_jupe->setActiveState($jupe->isActive() ? 1 : 0);
+			$db_jupe->setTs($serviceJupe->getSetTs());
+			$db_jupe->setLastMod($serviceJupe->getLastMod());
+			$db_jupe->setServer($serviceJupe->getServer());
+			$db_jupe->setDuration($serviceJupe->getDuration());
+			$db_jupe->setReason($serviceJupe->getReason());
+			$db_jupe->setActiveState($serviceJupe->isActive() ? 1 : 0);
 			$db_jupe->save();
 
 			$jupe_key = strtolower($serviceJupe->getServer());
-			$this->db_jupes[$jupe_key] = $jupe;
+			$this->db_jupes[$jupe_key] = $db_jupe;
 		}
 
 
@@ -404,22 +418,21 @@
 		/**
 		 * isBlacklistedDns is a generic function to provide extensibility
 		 * for easily checking DNS based blacklists. It has three arguments:
-		 * 	host:    The IP address of the host you wish to check.
-		 * 	suffix:    The DNS suffix for the DNSBL service.
-		 *    pos_resp:  An array containing responses that should be considered
-		 * 	           a positive match. If not provided, will assume that ANY
-		 * 	           successful DNS resolution against the DNSBL should be
-		 * 	           considered a positive match.
-		 * 
-		 * For example:
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com')
-		 * 		Returns true if 4.3.2.1.dnsbl.com returns any DNS resolution.
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com', 2)
-		 * 		Returns true if 4.3.2.1.dnsbl.com contains '127.0.0.2' in its 
-		 * 		response.
-		 * 	isBlacklistedDns('1.2.3.4', 'dnsbl.com', array(2, 3))
-		 * 		Returns true if 4.3.2.1.dnsbl.com contains either 127.0.0.2 or 
-		 * 		127.0.0.3 in its response.
+		 * host:    The IP address of the host you wish to check.
+		 * suffix:    The DNS suffix for the DNSBL service.
+		 * pos_resp:  An array containing responses that should be considered
+		 * a positive match. If not provided, will assume that ANY
+		 * successful DNS resolution against the DNSBL should be
+		 * considered a positive match.
+		 * * For example:
+		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com')
+		 * Returns true if 4.3.2.1.dnsbl.com returns any DNS resolution.
+		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com', 2)
+		 * Returns true if 4.3.2.1.dnsbl.com contains '127.0.0.2' in its 
+		 * response.
+		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com', array(2, 3))
+		 * Returns true if 4.3.2.1.dnsbl.com contains either 127.0.0.2 or 
+		 * 127.0.0.3 in its response.
 		 */
 		function isBlacklistedDns($host, $dns_suffix, $pos_responses = -1)
 		{
@@ -490,8 +503,7 @@
 			 * is neither but one exists on the same class C subnet. We don't
 			 * care if there's one on the subnet, only if the host we query
 			 * for is actually a Tor server or exit node.
-			 * 
-			 * For more information on the TOR DNSBL, please see
+			 * * For more information on the TOR DNSBL, please see
 			 * http://www.sectoor.de/tor.php.
 			 */
 			
@@ -608,10 +620,18 @@
 				$acct_id = $user_obj->getAccountId();
 			}
 			
+            // Modernization: Escape input
+            if (function_exists('db_escape')) {
+                $acct_id = db_escape($acct_id);
+            } else {
+                $acct_id = addslashes($acct_id);
+            }
+
 			$res = db_query("select `level` from `os_admins` where user_id = ". $acct_id);
-			if ($res && mysql_num_rows($res) > 0) {
-				$level = mysql_result($res, 0);
-				mysql_free_result($res);
+			
+            // Modernization: Use rowCount() and fetchColumn()
+            if ($res && $res->rowCount() > 0) {
+				$level = $res->fetchColumn(0);
 				return $level;
 			}
 			
@@ -687,5 +707,4 @@
 	}
 	
 	$os = new OperatorService();
-
-
+?>
