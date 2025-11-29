@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -189,44 +187,34 @@
 	 * most scenarios, irc_sprintf does a lot of legwork and makes for cleaner code.
 	 *
 	 * The custom conversion specifiers that can be used with irc_sprintf follow:
-	 * 
-	 *  %A    A space-delimited string representing all of an array's elements.
-	 *        Designed for string or numeric arrays only.
-	 *  
-	 *  %H    Human-readable name of the referenced object.
-	 *        For channels:  channel name.
-	 *        For servers:   full server name.
-	 *        For users:     nick name.
-	 *        For bots:      nick name.
-	 *        For glines:    the full mask of the gline.
-	 *  
-	 *  %C    Same as %H. Pneumonically represents channel names; provided as an extra
-	 *        flag only for readability in longer format strings.
-	 *  
-	 *  %N    The ircu numeric of the referenced object.
-	 *        For servers:   two-character server numeric (ex., Sc).
-	 *        For users:     five-character server+user numeric (ex., ScAAA).
-	 *        For bots:      five-character server+user numeric (ex., ScAAA).
-	 *  
-	 *  %U    The account name of the referenced object.
-	 *        For users:     user's logged-in account name, if any.
-	 *        For accounts:  account name.
-	 *  
-	 * Examples:
-	 *    sprintf('%s', $user_obj->getNick());    // Nick name
-	 *    irc_sprintf('%H', $user_obj);            // Nick name
-	 *    irc_sprintf('[%'#-13H]', $user_obj);     // Nick name, left-aligned in brackets
-	 *                                                and padded with hash symbols
-	 *  
-	 * The following are totally equivalent; the latter saves much space and provides
+	 * * %A    A space-delimited string representing all of an array's elements.
+	 * Designed for string or numeric arrays only.
+	 * * %H    Human-readable name of the referenced object.
+	 * For channels:  channel name.
+	 * For servers:   full server name.
+	 * For users:     nick name.
+	 * For bots:      nick name.
+	 * For glines:    the full mask of the gline.
+	 * * %C    Same as %H. Pneumonically represents channel names; provided as an extra
+	 * flag only for readability in longer format strings.
+	 * * %N    The ircu numeric of the referenced object.
+	 * For servers:   two-character server numeric (ex., Sc).
+	 * For users:     five-character server+user numeric (ex., ScAAA).
+	 * For bots:      five-character server+user numeric (ex., ScAAA).
+	 * * %U    The account name of the referenced object.
+	 * For users:     user's logged-in account name, if any.
+	 * For accounts:  account name.
+	 * * Examples:
+	 * sprintf('%s', $user_obj->getNick());    // Nick name
+	 * irc_sprintf('%H', $user_obj);            // Nick name
+	 * irc_sprintf('[%'#-13H]', $user_obj);     // Nick name, left-aligned in brackets
+	 * and padded with hash symbols
+	 * * The following are totally equivalent; the latter saves much space and provides
 	 * visual feedback as to what each argument corresponds to (numeric, channel, etc):
-	 *    
-	 *    sprintf('%s M %s +o %s %ld', $user_obj->getNumeric(), $chan_obj->getName, 
-	 *            $user2_obj->getNumeric(), time());
-	 *    
-	 *    irc_sprintf('%N M %C +o %N %ld', $user_obj, $chan_obj, $user2_obj, time());
-	 * 
-	 */
+	 * * sprintf('%s M %s +o %s %ld', $user_obj->getNumeric(), $chan_obj->getName, 
+	 * $user2_obj->getNumeric(), time());
+	 * * irc_sprintf('%N M %C +o %N %ld', $user_obj, $chan_obj, $user2_obj, time());
+	 * */
 	function irc_sprintf($format)
 	{
 		$args = func_get_args(); // Get array of all function arguments for vsprintf
@@ -345,7 +333,7 @@
 					 * Will pass this unknown spec to vsprintf as-is.
 					 */
 					default:
-						continue;
+						continue 2;
 				}
 				
 				/**
@@ -386,7 +374,3 @@
 		$index = rand(0, count($ban_reasons) - 1);
 		return $ban_reasons[$index];
 	}
-
-	
-
-
