@@ -1684,6 +1684,9 @@
 			elseif ($cmd_lower == 'confirmpass') {
 				if (count($args) > 1) $args[1] = '********'; // confirmpass <code> <pass>
 			}
+			elseif ($cmd_lower == 'confirmpass') {
+				if (count($args) > 1) $args[1] = '********'; // confirmpass <code> <pass>
+			}
 
 			$log_msg = irc_sprintf('[%'. NICK_LEN .'H] %s%s%s %A',
 				$user, BOLD_START, $command, BOLD_END, $args);
