@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -44,49 +42,51 @@
 		'from accounts '.
 		"where create_date >= '$last_update' or update_date >= '$last_update'", false);
 
-	while ($row = mysql_fetch_assoc($res)) {
-		$account = $this->getAccount($row['name']);
-		
-		if (!$account) {
-			/**
-			 * We've never seen this account before, so load it into memory and associate
-			 * it with any users who are using it.
-			 */
-			$account = new DB_User($row['account_id']);
-			$account_key = strtolower($account->getName());
+    // Modernization: Use PDO fetch loop
+	if ($res) {
+		while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+			$account = $this->getAccount($row['name']);
 			
-			$this->accounts[$account_key] = $account;
+			if (!$account) {
+				/**
+				 * We've never seen this account before, so load it into memory and associate
+				 * it with any users who are using it.
+				 */
+				$account = new DB_User($row['account_id']);
+				$account_key = strtolower($account->getName());
+				
+				$this->accounts[$account_key] = $account;
 
-			/**
-			 * Make sure that we tie up any loose ends where we receive an AC account
-			 * message from another service before we know about the account. The account
-			 * name is stored for each user, so we just need to find any users with a set
-			 * account name but a missing account ID. If this is the matching account,
-			 * set the account ID accordingly so we will now know who they are.
-			 */
-			foreach ($this->users as $numeric => $user) {
-				if (!$user->isLoggedIn() && $user->hasAccountName()
-						&& strtolower($user->getAccountName()) == $account_key)
-				{
-					$user->setAccountId($account->getId());
-					debug('Associated new account with user '. $user->getNick());
+				/**
+				 * Make sure that we tie up any loose ends where we receive an AC account
+				 * message from another service before we know about the account. The account
+				 * name is stored for each user, so we just need to find any users with a set
+				 * account name but a missing account ID. If this is the matching account,
+				 * set the account ID accordingly so we will now know who they are.
+				 */
+				foreach ($this->users as $numeric => $user) {
+					if (!$user->isLoggedIn() && $user->hasAccountName()
+							&& strtolower($user->getAccountName()) == $account_key)
+					{
+						$user->setAccountId($account->getId());
+						debug('Associated new account with user '. $user->getNick());
+					}
 				}
 			}
-		}
-		else {
-			/**
-			 * It appears we updated the account internally, so skip this account.
-			 */
-			if ($account->getUpdateTs() >= $last_update_ts)
-				continue;
-			
-			/**
-			 * Another service updated this account, so refresh its information.
-			 */
-			$account->refresh();
+			else {
+				/**
+				 * It appears we updated the account internally, so skip this account.
+				 */
+				if ($account->getUpdateTs() >= $last_update_ts)
+					continue;
+				
+				/**
+				 * Another service updated this account, so refresh its information.
+				 */
+				$account->refresh();
+			}
 		}
 	}
 	
 	$timer_data = time();
-	
-
+?>
