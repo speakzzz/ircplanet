@@ -3,6 +3,28 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
+ * * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ * 3. Neither the name of ircPlanet nor the names of its contributors may be
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 	require_once('core_globals.php');
@@ -68,6 +90,10 @@
 			if (!defined('SERVICE_CONFIG_FILE'))
 				define('SERVICE_CONFIG_FILE', 'service.ini');
 			
+			/**
+			 * The following methods are required for child classes. A service cannot exist
+			 * if it does not implement these methods.
+			 */
 			if (!method_exists($this, 'serviceConstruct'))
 				die("You have not defined a service constructor (serviceConstruct).");
 			if (!method_exists($this, 'serviceDestruct'))
@@ -151,6 +177,7 @@
 			$this->networkConfig = parse_ini_file(NETWORK_CONFIG_FILE);
 			$this->config = parse_ini_file(SERVICE_CONFIG_FILE);
 			
+			/** Network level config overrides service level config **/
 			foreach ($this->networkConfig as $var => $value) {
 				$this->config[$var] = $value;
 			}
@@ -245,6 +272,12 @@
 				include($commands_file);
 			}
 
+
+			/**
+			 * Set up the array we use for the SHOWCOMMANDS command. It's very
+			 * expensive to sort this list and hunt/peck based on a user's level
+			 * every time the command is issued.
+			 */
 			$tmp_commands = array();
 			$this->commands_list = array();
 
@@ -973,6 +1006,8 @@
 			
 			debug("Entering main loop...");
 			
+			// Modernization: Handle Socket objects in PHP 8+
+			// is_resource($this->sock) will fail in PHP 8 if $this->sock is an object.
 			while ($this->sock) {
 				$iter++;
 				
@@ -988,7 +1023,7 @@
 				
 				$this->servicePreread();
 				
-				// Read from socket
+				// Read from socket - PHP_BINARY_READ ensures we get raw bytes
 				$read = @socket_read($this->sock, 2048, PHP_BINARY_READ);
 				
 				if ($read === false) {
@@ -1484,40 +1519,24 @@
 		
 		function performChanUserMode($source_num, $chan_name, $mode_pol, $mode_char, $arg_list)
 		{
+			$args = array();
 			$chan = $this->getChannel($chan_name);
 			
 			if (!$chan)
 				return;
 			
-            // Flatten $arg_list if it is an array
-            $args = array();
-            if (is_array($arg_list)) {
-                 foreach ($arg_list as $arg) {
-                      if (is_array($arg)) {
-                           foreach ($arg as $sub_arg) $args[] = $sub_arg;
-                      } else {
-                           $args[] = $arg;
-                      }
-                 }
-            } else {
-                 // Handle variable arguments (legacy call style)
-                 // The original code was checking !is_array($arg_list) but using func_get_args
-                 // This block recreates the args array from the function arguments
-                 $arg_count = func_num_args();
-                 for ($i = 4; $i < $arg_count; ++$i) {
-                      $val = func_get_arg($i);
-                      if (is_array($val)) {
-                           foreach ($val as $v) $args[] = $v;
-                      } else {
-                           $args[] = $val;
-                      }
-                 }
-            }
-            
-            $mode_str = $mode_pol . str_repeat($mode_char, count($args));
-            $mode_args = implode(' ', $args);
-            $mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
-            return $this->sendModeLine($mode_line);
+			if (!is_array($arg_list)) {
+				$arg_list = array();
+				$arg_count = func_num_args();
+
+				for ($i = 4; $i < $arg_count; ++$i)
+					$arg_list[] = func_get_arg($i);
+			}
+
+			$mode_str = $mode_pol . str_repeat($mode_char, count($arg_list));
+			$mode_args = implode(' ', $arg_list);
+			$mode_line = irc_sprintf(FMT_MODE_HACK, $source_num, $chan->getName(), $mode_str, $mode_args, $chan->getTs());
+			return $this->sendModeLine($mode_line);
 		}
 		
 		function op($chan_name, $num_list)       { return $this->performChanUserMode(SERVER_NUM, $chan_name, '+', 'o', $num_list); }
@@ -1607,6 +1626,26 @@
 				return;
 
 			$command = array_shift($args);
+			$cmd_lower = strtolower($command);
+			
+			// Security: Redact passwords from logs
+			if ($cmd_lower == 'login') {
+				if (count($args) > 1) $args[1] = '********'; // login <user> <pass>
+				else if (count($args) > 0) $args[0] = '********'; // login <pass>
+			}
+			elseif ($cmd_lower == 'register') {
+				if (count($args) > 0) $args[0] = '********'; // register <pass> <email>
+			}
+			elseif ($cmd_lower == 'newpass') {
+				if (count($args) > 0) $args[0] = '********'; // newpass <pass>
+			}
+			elseif ($cmd_lower == 'ghost') {
+				if (count($args) > 1) $args[1] = '********'; // ghost <nick> <pass>
+			}
+			elseif ($cmd_lower == 'set' && count($args) > 1 && strtolower($args[0]) == 'password') {
+				$args[1] = '********'; // set password <pass>
+			}
+
 			$log_msg = irc_sprintf('[%'. NICK_LEN .'H] %s%s%s %A',
 				$user, BOLD_START, $command, BOLD_END, $args);
 
