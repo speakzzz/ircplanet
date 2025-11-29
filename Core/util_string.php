@@ -203,8 +203,10 @@
 
 		$callback = function($matches) use (&$args, &$arg_idx) {
 			// $matches[0] is the full specifier (e.g. "%-10s" or "%A")
-			// $matches[1] is the type char (e.g. "s" or "A")
+			// $matches[1] is the type char (e.g. "s" or "A") - NOW CAPTURED CORRECTLY
 
+			if (!isset($matches[1])) return $matches[0]; // Safety fall-through
+			
 			if ($matches[1] == '%') return '%'; // Handle escaped %%
 
 			if (!array_key_exists($arg_idx, $args)) {
@@ -229,6 +231,7 @@
 						if (method_exists($arg, 'getNick')) $val = $arg->getNick();
 						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
 						elseif (method_exists($arg, 'getMask')) $val = $arg->getMask();
+						else $val = (string)$arg;
 					} else {
 						$val = (string)$arg;
 					}
@@ -250,44 +253,8 @@
 					if (is_object($arg)) {
 						if (method_exists($arg, 'getAccountName')) $val = $arg->getAccountName();
 						elseif (method_exists($arg, 'getName')) $val = $arg->getName();
+						else $val = (string)$arg;
 					} else {
 						$val = (string)$arg;
 					}
 					$spec = str_replace('U', 's', $full_spec);
-					return sprintf($spec, $val);
-
-				default:
-					// Standard specifier, use original arg and spec
-					return sprintf($full_spec, $arg);
-			}
-		};
-
-		// Regex to match printf specifiers: % [flags/width/precision] type
-		// Types: Standard (bcdeufFosxX) + Custom (ACHNU) + Literal (%)
-		return preg_replace_callback(
-			'/%(?:[0-9.\-]*[bcdeufFosxXACHNU%])/', 
-			$callback, 
-			$format
-		);
-	}
-	
-
-	function randomKickReason()
-	{
-		$ban_reasons = array(
-			"Don't let the door hit you on the way out!",
-			"Sorry to see you go... actually no, not really.",
-			"This is your wake-up call...",
-			"Behave yourself!",
-			"Ooh, behave...",
-			"Not today, child.",
-			"All your base are belong to me",
-			"Watch yourself!",
-			"Better to remain silent and be thought a fool than to speak out and remove all doubt.",
-			"kthxbye."
-		);
-		
-		$index = rand(0, count($ban_reasons) - 1);
-		return $ban_reasons[$index];
-	}
-?>
