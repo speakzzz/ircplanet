@@ -1305,7 +1305,12 @@
 							$chan->removeOp($numeric);
 
 						$user = $this->getUser($numeric);
-						$readable_args[] = $user->getNick();
+                        // FIX: Check if user exists before accessing getNick()
+                        if ($user) {
+    						$readable_args[] = $user->getNick();
+                        } else {
+                            $readable_args[] = $numeric; // Fallback
+                        }
 					} 
 					elseif ($mode == 'v') {
 						$numeric = $args[$mode_arg++];
@@ -1315,7 +1320,12 @@
 							$chan->removeVoice($numeric);
 
 						$user = $this->getUser($numeric);
-						$readable_args[] = $user->getNick();
+                        // FIX: Check if user exists before accessing getNick()
+                        if ($user) {
+    						$readable_args[] = $user->getNick();
+                        } else {
+                            $readable_args[] = $numeric; // Fallback
+                        }
 					}
 					elseif ($mode == 'b') {
 						$mask = $args[$mode_arg++];
@@ -1414,9 +1424,13 @@
 					}
 					
 					if (++$mode_count == MAX_MODES_PER_LINE || $i == strlen($modes) - 1) {
-						$outgoing[] = irc_sprintf("%s M %s %s%s%A", $source, $target, $tmp_modes, 
-							count($tmp_args) > 0 ? ' ' : '', 
-							$tmp_args);
+                        // FIX: Manually flatten array args to avoid using %A specifier
+                        $flat_args = count($tmp_args) > 0 ? implode(' ', $tmp_args) : '';
+                        $spacing = count($tmp_args) > 0 ? ' ' : '';
+
+						$outgoing[] = irc_sprintf("%s M %s %s%s%s", $source, $target, $tmp_modes, 
+							$spacing, 
+							$flat_args);
 						$mode_count = 0;
 						$tmp_modes = $tmp_pol;
 						$tmp_args = array();
