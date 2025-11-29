@@ -1006,7 +1006,9 @@
 			
 			debug("Entering main loop...");
 			
-			while (is_resource($this->sock)) {
+			// Modernization: Handle Socket objects in PHP 8+
+			// is_resource($this->sock) will fail in PHP 8 if $this->sock is an object.
+			while ($this->sock) {
 				$iter++;
 				
 				// Calculate timeout for next timer
@@ -1021,7 +1023,7 @@
 				
 				$this->servicePreread();
 				
-				// Read from socket
+				// Read from socket - PHP_BINARY_READ ensures we get raw bytes
 				$read = @socket_read($this->sock, 2048, PHP_BINARY_READ);
 				
 				if ($read === false) {
