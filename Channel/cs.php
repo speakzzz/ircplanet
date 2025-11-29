@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -45,24 +43,26 @@
 		function loadChannels()
 		{
 			$res = db_query('select * from channels order by lower(name) asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$channel_key = strtolower($row['name']);
-				$channel = new DB_Channel($row);
-				
-				if ($channel->autoLimits() && !$channel->hasPendingAutolimit()) {
-					$this->addTimer(false, $channel->getAutoLimitWait(), 
-						'auto_limit.php', $channel->getName());
-					$channel->setPendingAutolimit(true);
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$channel_key = strtolower($row['name']);
+					$channel = new DB_Channel($row);
+					
+					if ($channel->autoLimits() && !$channel->hasPendingAutolimit()) {
+						$this->addTimer(false, $channel->getAutoLimitWait(), 
+							'auto_limit.php', $channel->getName());
+						$channel->setPendingAutolimit(true);
+					}
+					
+					$clean_defmodes = $this->cleanModes($channel->getDefaultModes());
+					if ($channel->getDefaultModes() != $clean_defmodes) {
+						debugf("Setting defmodes for %s from [%s] to [%s]", $channel->getName(), $channel->getDefaultModes(), $clean_defmodes);
+						$channel->setDefaultModes($clean_defmodes);
+						$channel->save();
+					}
+					
+					$this->db_channels[$channel_key] = $channel;
 				}
-				
-				$clean_defmodes = $this->cleanModes($channel->getDefaultModes());
-				if ($channel->getDefaultModes() != $clean_defmodes) {
-					debugf("Setting defmodes for %s from [%s] to [%s]", $channel->getName(), $channel->getDefaultModes(), $clean_defmodes);
-					$channel->setDefaultModes($clean_defmodes);
-					$channel->save();
-				}
-				
-				$this->db_channels[$channel_key] = $channel;
 			}
 			
 			debugf("Loaded %d channel records.", count($this->db_channels));
@@ -73,20 +73,22 @@
 		{
 			$n = 0;
 			$res = db_query('select * from channel_access');
-			while ($row = mysql_fetch_assoc($res)) {
-				$chan_id = $row['chan_id'];
-				$user_id = $row['user_id'];
-				
-				$chan = $this->getChannelRegById($chan_id);
-				if (!$chan) {
-					debug("*** Loaded channel access pair for channel ID $chan_id, but no such channel exists!");
-					continue;
-				}
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$chan_id = $row['chan_id'];
+					$user_id = $row['user_id'];
+					
+					$chan = $this->getChannelRegById($chan_id);
+					if (!$chan) {
+						debug("*** Loaded channel access pair for channel ID $chan_id, but no such channel exists!");
+						continue;
+					}
 
-				$access = new DB_Channel_Access($row);
-				$chan->addAccess($access);
-				
-				$n++;
+					$access = new DB_Channel_Access($row);
+					$chan->addAccess($access);
+					
+					$n++;
+				}
 			}
 			
 			debug("Loaded $n channel access records.");
@@ -97,22 +99,24 @@
 		{
 			$n = 0;
 			$res = db_query('select * from channel_bans');
-			while ($row = mysql_fetch_assoc($res)) {
-				$chan_id = $row['chan_id'];
-				$user_id = $row['user_id'];
-				$mask = $row['mask'];
-				
-				$chan = $this->getChannelRegById($chan_id);
-				if (!$chan) {
-					debug("*** Loaded ban for channel ID $chan_id, but no such channel exists!");
-					continue;
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$chan_id = $row['chan_id'];
+					$user_id = $row['user_id'];
+					$mask = $row['mask'];
+					
+					$chan = $this->getChannelRegById($chan_id);
+					if (!$chan) {
+						debug("*** Loaded ban for channel ID $chan_id, but no such channel exists!");
+						continue;
+					}
+					
+					$ban = new DB_Ban($chan_id, $user_id, $mask);
+					$ban->loadFromRow($row);
+					$chan->addBan($ban);
+					
+					$n++;
 				}
-				
-				$ban = new DB_Ban($chan_id, $user_id, $mask);
-				$ban->loadFromRow($row);
-				$chan->addBan($ban);
-				
-				$n++;
 			}
 			
 			debug("Loaded $n channel ban records.");
@@ -122,11 +126,13 @@
 		function loadBadchans()
 		{
 			$res = db_query('select * from cs_badchans order by badchan_id asc');
-			while ($row = mysql_fetch_assoc($res)) {
-				$badchan = new DB_BadChan($row);
-				
-				$badchan_key = strtolower($badchan->getMask());
-				$this->db_badchans[$badchan_key] = $badchan;
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$badchan = new DB_BadChan($row);
+					
+					$badchan_key = strtolower($badchan->getMask());
+					$this->db_badchans[$badchan_key] = $badchan;
+				}
 			}
 
 			debugf('Loaded %d badchans.', count($this->db_badchans));
@@ -325,9 +331,8 @@
 				$account = $user_obj;
 			
 			$res = db_query("select `level` from `cs_admins` where user_id = ". $account->getId());
-			if ($res && mysql_num_rows($res) > 0) {
-				$level = mysql_result($res, 0);
-				mysql_free_result($res);
+			if ($res && $res->rowCount() > 0) {
+				$level = $res->fetchColumn(0);
 				return $level;
 			}
 			
@@ -481,5 +486,3 @@
 	}
 	
 	$cs = new ChannelService();
-
-
