@@ -208,7 +208,13 @@
 
 		/**
 		 * isBlacklistedDns is a generic function to provide extensibility
-		 * for easily checking DNS based blacklists.
+		 * for easily checking DNS based blacklists. It has three arguments:
+		 * host:    The IP address of the host you wish to check.
+		 * suffix:    The DNS suffix for the DNSBL service.
+		 * pos_resp:  An array containing responses that should be considered
+		 * a positive match. If not provided, will assume that ANY
+		 * successful DNS resolution against the DNSBL should be
+		 * considered a positive match.
 		 */
 		function isBlacklistedDns($host, $dns_suffix, $pos_responses = -1)
 		{
@@ -218,6 +224,12 @@
 			
 			$start_ts = microtime(true);
 			
+			/**
+			 * DNS blacklists work by storing records for ipaddr.dnsbl.com,
+			 * but with DNS all octets are reversed. So to check if 1.2.3.4
+			 * is blacklisted in a DNSBL, we need to query for the hostname
+			 * 4.3.2.1.dnsbl.com.
+			 */
 			$octets = explode('.', $host);
 			$reverse_octets = implode('.', array_reverse($octets));
 			$lookup_addr = $reverse_octets .'.'. $dns_suffix .'.';
@@ -268,6 +280,12 @@
 		
 		function isTorHost($host)
 		{
+			/**
+			 * The TOR DNSBL will return 127.0.0.1 as the address for a host
+			 * if it is a Tor server or exit node.
+			 * * REMOVED: tor.ahbl.org (Dead/Wildcarded)
+			 * REMOVED: tor.dnsbl.sectoor.de (Dead)
+			 */
 			$blacklists = array(
 				'tor.dan.me.uk'        => array(100)
 			);
