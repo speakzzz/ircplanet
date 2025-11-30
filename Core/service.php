@@ -1059,26 +1059,56 @@
 					if ($timer->getNextRun() <= $break_time)
 						$this->runTimer($n);
 				}
+
+				// BURST QUEUE (Transaction Wrapper)
+				$in_transaction = false;
+
+				// Only check buffer if it's not empty
+				if (strpos($buffer, "\n") !== false) {
+					// Start transaction if connected to DB
+					if ($this->db && !$this->db->inTransaction()) {
+						try {
+							$this->db->beginTransaction();
+							$in_transaction = true;
+						} catch (Exception $e) {
+							debug("DB Error starting transaction: " . $e->getMessage());
+						}
+					}
+				}
 				
 				// Process Buffer
-				while (($endpos = strpos($buffer, "\n")) !== false) {
-                    // FIX: Check if socket is valid before processing (in case it closed)
-                    if (!$this->sock instanceof Socket) {
-                        break 2;
-                    }
+				try {
+					while (($endpos = strpos($buffer, "\n")) !== false) {
+						// Check if socket is valid before processing (in case it closed)
+						if (!$this->sock instanceof Socket) {
+							break 2;
+						}
 
-					$line = substr($buffer, 0, $endpos);
-					// Handle potential carriage returns
-					$line = rtrim($line, "\r");
-					$buffer = substr($buffer, $endpos + 1);
-					
-					if (!empty($line)) {
-						if (!preg_match("/^.. [GZ] /", $line))
-							debug("[RECV] $line");
+						$line = substr($buffer, 0, $endpos);
+						// Handle potential carriage returns
+						$line = rtrim($line, "\r");
+						$buffer = substr($buffer, $endpos + 1);
 						
-						$this->parse($line);
-						$this->lines_received++;
+						if (!empty($line)) {
+							if (!preg_match("/^.. [GZ] /", $line))
+								debug("[RECV] $line");
+							
+							$this->parse($line);
+							$this->lines_received++;
+						}
 					}
+					
+					// Commit transaction
+					if ($in_transaction) {
+						$this->db->commit();
+					}
+
+				} catch (Exception $e) {
+					// Rollback on error
+					if ($in_transaction) {
+						try { $this->db->rollBack(); } catch(Exception $e2) {}
+					}
+					debug("Fatal Processing Error: " . $e->getMessage());
 				}
 			}
 			
@@ -1680,9 +1710,6 @@
 			}
 			elseif ($cmd_lower == 'set' && count($args) > 1 && strtolower($args[0]) == 'password') {
 				$args[1] = '********'; // set password <pass>
-			}
-			elseif ($cmd_lower == 'confirmpass') {
-				if (count($args) > 1) $args[1] = '********'; // confirmpass <code> <pass>
 			}
 
 			$log_msg = irc_sprintf('[%'. NICK_LEN .'H] %s%s%s %A',
