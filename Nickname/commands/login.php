@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * * Redistribution and use in source and binary forms, with or without 
@@ -26,6 +26,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+	/**
+	 * SECURITY CHECK: Force secure syntax
+	 * This prevents users from logging in via simple /msg N, which protects
+	 * against spoofing on some network configurations.
+	 */
+	if (!isset($is_secure) || !$is_secure) {
+		$bot->notice($user, "For security reasons, you must log in using the secure syntax:");
+		$bot->noticef($user, "/msg %s@%s LOGIN <password>", $bot->getNick(), SERVER_NAME);
+		return false;
+	}
 	
 	if ($cmd_num_args == 1) {
 		$user_name = $user->getNick();
@@ -74,3 +85,4 @@
 	else {
 		$bot->notice($user, "No such account!");
 	}
+?>
