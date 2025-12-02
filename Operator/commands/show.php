@@ -3,20 +3,18 @@
  * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -40,8 +38,10 @@
 		}
 
 		$bot->noticef($user, 'Bad Channel Words List:');
-		foreach ($this->db_badchans as $bad_key => $bad_name) {
-			$bot->noticef($user, '  %2d) %s', ++$n, $bad_name);
+		foreach ($this->db_badchans as $bad_key => $bad_obj) {
+            // Fix: $bad_obj is an object, not a string name
+            $name = is_object($bad_obj) ? $bad_obj->getMask() : $bad_obj;
+			$bot->noticef($user, '  %2d) %s', ++$n, $name);
 		}
 	}
 	elseif ($option == 'CLONES') {
@@ -53,6 +53,9 @@
 			$clones[$tmp_user->getIp()]++;
 		}
 
+		// Filter out non-clones
+        $clones = array_filter($clones, function($cnt) { return $cnt > 1; });
+
 		if (count($clones) == 0) {
 			$bot->notice($user, 'There are currently no clones.');
 			return false;
@@ -63,9 +66,6 @@
 
 		$bot->notice($user, 'Currently connected clones:');
 		foreach ($clones as $ip => $count) {
-			if ($count == 1)
-				continue;
-
 			$bot->noticef($user, '  %2d) %d clones from %s', ++$n, $count, $ip);
 		}
 	}
@@ -142,5 +142,4 @@
 		$bot->noticef($user, '%s is not a valid option. Please use %sHELP SHOW%s to see valid options.',
 			$option, BOLD_START, BOLD_END);
 	}
-
-
+?>
