@@ -47,7 +47,6 @@
 		{
 		}
 		
-		
 		function serviceDestruct()
 		{
 		}
@@ -143,7 +142,6 @@
 		{
 			$res = db_query('select * from os_glines order by gline_id asc');
 			
-            // Modernization: Use PDO fetch loop
             if ($res) {
                 while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
                     $gline = new DB_Gline($row);
@@ -170,7 +168,6 @@
 		{
 			$res = db_query('select * from os_mutes order by mute_id asc');
 			
-            // Modernization: Use PDO fetch loop
             if ($res) {
                 while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
                     $mute = new DB_Mute($row);
@@ -197,7 +194,6 @@
 		{
 			$res = db_query('select * from os_jupes order by jupe_id asc');
 			
-            // Modernization: Use PDO fetch loop
             if ($res) {
                 while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
                     $jupe = new DB_Jupe($row);
@@ -224,7 +220,6 @@
 		{
 			$res = db_query('select * from os_badchans order by badchan_id asc');
 			
-            // Modernization: Use PDO fetch loop
             if ($res) {
                 while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
                     $badchan = new DB_BadChan($row);
@@ -266,8 +261,6 @@
 
 			return false;
 		}
-
-
 
 
 		function serviceAddGline($serviceGline)
@@ -415,25 +408,6 @@
 		}
 
 		
-		/**
-		 * isBlacklistedDns is a generic function to provide extensibility
-		 * for easily checking DNS based blacklists. It has three arguments:
-		 * host:    The IP address of the host you wish to check.
-		 * suffix:    The DNS suffix for the DNSBL service.
-		 * pos_resp:  An array containing responses that should be considered
-		 * a positive match. If not provided, will assume that ANY
-		 * successful DNS resolution against the DNSBL should be
-		 * considered a positive match.
-		 * * For example:
-		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com')
-		 * Returns true if 4.3.2.1.dnsbl.com returns any DNS resolution.
-		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com', 2)
-		 * Returns true if 4.3.2.1.dnsbl.com contains '127.0.0.2' in its 
-		 * response.
-		 * isBlacklistedDns('1.2.3.4', 'dnsbl.com', array(2, 3))
-		 * Returns true if 4.3.2.1.dnsbl.com contains either 127.0.0.2 or 
-		 * 127.0.0.3 in its response.
-		 */
 		function isBlacklistedDns($host, $dns_suffix, $pos_responses = -1)
 		{
 			// Don't waste time checking private class IPs.
@@ -442,12 +416,6 @@
 			
 			$start_ts = microtime(true);
 			
-			/**
-			 * DNS blacklists work by storing records for ipaddr.dnsbl.com,
-			 * but with DNS all octets are reversed. So to check if 1.2.3.4
-			 * is blacklisted in a DNSBL, we need to query for the hostname
-			 * 4.3.2.1.dnsbl.com.
-			 */
 			$octets = explode('.', $host);
 			$reverse_octets = implode('.', array_reverse($octets));
 			$lookup_addr = $reverse_octets .'.'. $dns_suffix .'.';
@@ -455,7 +423,8 @@
 			debugf('DNSBL checking %s', $lookup_addr);
 			$dns_result = @dns_get_record($lookup_addr, DNS_A);
 
-			if (count($dns_result) > 0) {
+            // FIX: Check if result is valid before counting
+			if ($dns_result !== false && count($dns_result) > 0) {
 				$dns_result = $dns_result[0]['ip'];
 				$resolved = true;
 			}
@@ -497,24 +466,10 @@
 		
 		function isTorHost($host)
 		{
-			/**
-			 * The TOR DNSBL will return 127.0.0.1 as the address for a host
-			 * if it is a Tor server or exit node, and 127.0.0.2 if the host
-			 * is neither but one exists on the same class C subnet. We don't
-			 * care if there's one on the subnet, only if the host we query
-			 * for is actually a Tor server or exit node.
-			 * * For more information on the TOR DNSBL, please see
-			 * http://www.sectoor.de/tor.php.
-			 */
-			
-			/**
-			 * We use multiple Tor DNSBLs because sometimes you'll get a
-			 * false negative if one DNSBL isn't 100% up-to-date. Rare,
-			 * but not impossible.
-			 */
+            // UPDATED: Removed dead blacklists
 			$blacklists = array(
-				'tor.dan.me.uk'        => array(100),
-				);
+				'tor.dan.me.uk'        => array(100)
+			);
 
 			foreach ($blacklists as $dns_suffix => $responses) {
 				if ($this->isBlacklistedDns($host, $dns_suffix, $responses))
@@ -530,11 +485,11 @@
 			/**
 			 * To determine if a host is compromised, check a myriad of public
 			 * DNSBL services (some are IRC-centric) to see if they are listed.
+             * UPDATED: Removed dead blacklists.
 			 */
 			$blacklists = array(
 				'dnsbl.dronebl.org'   => array(3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19),
-				'rbl.efnetrbl.org'    => array(1, 2, 3, 4, 5),
-				'rbl.evilnet.org'   => array(3, 5, 6, 7, 8, 10, 17, 18)
+				'rbl.efnetrbl.org'    => array(1, 2, 3, 4, 5)
 			);
 			
 			foreach ($blacklists as $dns_suffix => $responses) {
@@ -611,7 +566,6 @@
 				$acct_id = $user_obj->getAccountId();
 			}
 			
-            // Modernization: Escape input
             if (function_exists('db_escape')) {
                 $acct_id = db_escape($acct_id);
             } else {
@@ -620,7 +574,6 @@
 
 			$res = db_query("select `level` from `os_admins` where user_id = ". $acct_id);
 			
-            // Modernization: Use rowCount() and fetchColumn()
             if ($res && $res->rowCount() > 0) {
 				$level = $res->fetchColumn(0);
 				return $level;
@@ -654,8 +607,9 @@
 			elseif (isUser($source))
 				$source = $source->getNick();
 			
+            // FIX: Removed eval(). Use variable variables.
 			for ($i = 1; $i <= 5; $i++) {
-				eval('$arg = $arg'. $i .';');
+				$arg = ${"arg$i"};
 
 				if (!is_object($arg)) {
 					continue;
@@ -666,7 +620,7 @@
 				elseif (isUser($arg))
 					$arg = $arg->getNick();
 				
-				eval('$arg'. $i .' = $arg;');
+				${"arg$i"} = $arg;
 			}
 			
 			if (strlen($source) > NICK_LEN)
@@ -687,11 +641,6 @@
 
 			$bot->messagef($channel, '[%'. (NICK_LEN + $margin) .'s] %s %s',
 				$source, $event_name, $misc);
-
-/*
-			if ($this->finished_burst)
-				$bot->messagef($channel, "[%". (NICK_LEN + $margin) ."s] %s %s", $source, $event_name, $misc);
-*/
 			
 			return true;
 		}
