@@ -1,6 +1,6 @@
 <?php
 /*
- * IRCPlanet Services for ircu
+ * ircPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * * Redistribution and use in source and binary forms, with or without 
@@ -29,12 +29,13 @@
 
 	/**
 	 * SECURITY CHECK: Force secure syntax
-	 * This prevents users from logging in via simple /msg N, which protects
-	 * against spoofing on some network configurations.
+	 * This prevents users from logging in via simple /msg N.
+	 * Requires that the P10 handler correctly detects the '@' syntax.
 	 */
 	if (!isset($is_secure) || !$is_secure) {
 		$bot->notice($user, "For security reasons, you must log in using the secure syntax:");
-		$bot->noticef($user, "/msg %s@%s LOGIN <password>", $bot->getNick(), SERVER_NAME);
+		// UPDATED: Suggest LOGIN <account> <password> explicitly
+		$bot->noticef($user, "/msg %s@%s LOGIN <account> <password>", $bot->getNick(), SERVER_NAME);
 		return false;
 	}
 	
