@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,23 +29,31 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+	// Validate timer data
+	if (empty($timer_data) || !is_array($timer_data) || count($timer_data) < 2) {
+		return false;
+	}
+
 	$numeric = $timer_data[0];
 	$account_name = $timer_data[1];
 	
 	$user = $this->getUser($numeric);
 	$account = $this->getAccount($account_name);
 	
-	if (!$user || !$account)
+	// If user disconnected or account was dropped, stop.
+	if (!$user || !$account) {
 		return false;
+	}
 	
 	$nick_c = strtolower($user->getNick());
 	$account_c = strtolower($account->getName());
 	
+	// Check: Is user still using the nick? AND Are they NOT logged into this account?
 	if ($nick_c == $account_c && $user->getAccountId() != $account->getId()) {
-		$this->kill($user, 'Enforcing registered nick');
+		// Enforce: Kill the user
+		$this->kill($user, 'This nickname is registered and protected.');
 		return true;
 	}
 	
 	return false;
-	
-
+?>
