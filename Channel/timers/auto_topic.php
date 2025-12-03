@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,20 +29,27 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
-	foreach ($this->db_channels as $chan_key => $dbChan) {
-		$chan = $this->getChannel($dbChan->getName());
-		
-		if (!$chan) {
+	// Iterate through all registered channels loaded in memory
+	foreach ($this->db_channels as $chan_name => $reg) {
+		// Only process if Topic Lock is enabled on the registration
+		if (!$reg->topicLock()) {
 			continue;
 		}
-		
-		if ($dbChan->autoTopic() && $dbChan->isActive() 
-				&& time() - $dbChan->getLastAutoTopicTime() >= (30 * 60)
-				&& $chan->getTopic() != $dbChan->getDefaultTopic()
-				&& $chan->isOp($bot->getNumeric()))
-		{
-			$bot->topic($chan->getName(), $dbChan->getDefaultTopic());
-			$dbChan->setLastTopic($dbChan->getDefaultTopic());
-			$dbChan->setLastAutoTopicTime(time());
+
+		// Check if the channel is currently active (exists in memory)
+		$chan = $this->getChannel($chan_name);
+		if (!$chan) {
+			continue; 
+		}
+
+		// Compare Current Topic vs Saved Default Topic
+		$current_topic = $chan->getTopic();
+		$default_topic = $reg->getDefaultTopic();
+
+		// If they don't match, reset it
+		if ($current_topic != $default_topic) {
+			// Use the bot to send the topic change (handles P10 timestamps correctly)
+			$bot->topic($chan_name, $default_topic);
 		}
 	}
+?>
