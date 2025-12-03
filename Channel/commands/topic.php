@@ -65,8 +65,10 @@
 		$reg->setDefaultTopic($topic);
 		$reg->save();
 
-		// Broadcast the new topic to the IRC network
-		$this->topic($chan_name, $topic);
+		// FIX: Use $bot->topic instead of $this->topic.
+        // Bot->topic handles P10 timestamps correctly (ChannelTS + TopicTS)
+        // Service->topic sends as server and might miss timestamps required by ircu.
+		$bot->topic($chan_name, $topic);
 
 		$bot->noticef($user, "Topic updated for %s.", $chan_name);
 	}
