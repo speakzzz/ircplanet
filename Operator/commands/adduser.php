@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -28,37 +26,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-	
-	$acct_name = $pargs[1];
+
+	$target = $pargs[1];
 	$level = $pargs[2];
 	
-	if (!($acct = $this->getAccount($acct_name))) {
-		$bot->noticef($user, 'The account %s does not exist.', $acct_name);
-		return false;
-	}
-	
 	if (!is_numeric($level)) {
-		$bot->noticef($user, 'The level you specified is not numeric.');
+		$bot->notice($user, 'Level must be a number.');
 		return false;
 	}
 	
-	if ($level >= $user_level) {
-		$bot->noticef($user, 'You cannot set someone\'s level higher than or equal to your own.');
+	$account = $this->getAccount($target);
+	
+	if (!$account) {
+		$bot->noticef($user, 'Account %s does not exist.', $target);
 		return false;
 	}
 	
-	if ($level <= 0) {
-		$bot->noticef($user, 'The level must be greater than zero.');
+	// Security check: prevent admins from creating peers or superiors
+	if ($this->getUserLevel($user) <= $level) {
+		$bot->notice($user, 'You cannot add a user with a level equal to or higher than your own.');
 		return false;
 	}
-	
-	$curr_level = $this->getUserLevel($acct->getId());
-	if ($curr_level > 0) {
-		$bot->noticef($user, '%s already has level %s access.', $acct->getName(), $curr_level);
-		return false;
-	}
-	
-	db_query("insert into `os_admins` (user_id, level) values ('". $acct->getId() ."', '$level')");
-	$bot->noticef($user, '%s now has level %d access.', $acct->getName(), $level);
 
+	// Modernization: Use db_escape for safety
+	$safe_id = db_escape($account->getId());
+	$safe_level = db_escape($level);
+	
+	// Insert or Update (Modern MySQL syntax to handle both cases)
+	db_query("INSERT INTO os_admins (user_id, level) VALUES ('$safe_id', '$safe_level') 
+	          ON DUPLICATE KEY UPDATE level='$safe_level'");
 
+	$bot->noticef($user, 'Added %s to the %s admin list with level %d.', 
+		$account->getName(), $this->getNick(), $level);
+?>

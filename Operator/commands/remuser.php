@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -28,27 +26,35 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-	
-	$acct_name = $pargs[1];
-	
-	if (!($acct = $this->getAccount($acct_name))) {
-		$bot->noticef($user, 'The account %s does not exist.', $acct_name);
-		return false;
-	}
-	
-	$curr_level = $this->getUserLevel($acct->getId());
-	
-	if ($curr_level == 0) {
-		$bot->noticef($user, '%s does not have any existing access.', $acct->getName());
-		return false;
-	}
-	
-	if ($curr_level >= $user_level) {
-		$bot->noticef($user, 'You cannot remove someone whose level is greater than or equal to your own.');
-		return false;
-	}
-	
-	db_query("delete from `os_admins` where `user_id` = '". $acct->getId() ."'");
-	$bot->noticef($user, '%s\'s level %d access has been revoked.', $acct->getName(), $curr_level);
 
+	$target = $pargs[1];
+	$account = $this->getAccount($target);
+	
+	if (!$account) {
+		$bot->noticef($user, 'Account %s does not exist.', $target);
+		return false;
+	}
+	
+	$target_level = $this->getUserLevel($account);
+	
+	// Security Check: Prevent removing users with equal or higher access
+	if ($this->getUserLevel($user) <= $target_level) {
+		$bot->notice($user, 'You cannot remove a user with a level equal to or higher than your own.');
+		return false;
+	}
 
+	// Modernization: Use db_escape for safety
+	$safe_id = db_escape($account->getId());
+	
+	// Delete from the Operator Service admins table
+	db_query("DELETE FROM os_admins WHERE user_id = '$safe_id'");
+	
+	// Verify removal by checking if their level is now 0
+	if ($this->getUserLevel($account) == 0) {
+		$bot->noticef($user, 'Removed %s from the %s admin list.', 
+			$account->getName(), $this->getNick());
+	} else {
+		$bot->noticef($user, 'Failed to remove %s from the admin list (or they were not an admin).', 
+			$account->getName());
+	}
+?>
