@@ -28,7 +28,9 @@
  */
 
 	$chan_name = $pargs[1];
-	$password = $pargs[2];
+
+	// FIX: Check if a password was provided before accessing the array index
+	$password = isset($pargs[2]) ? $pargs[2] : '';
 
 	// 1. Verify channel exists
 	$reg = $this->getChannelReg($chan_name);
@@ -44,9 +46,12 @@
 		return false;
 	}
 
-	// 3. Verify Password (if provided, though usually owner access is enough)
-	// Note: The original system might check channel password, but typically user auth is enough.
-	// If you want to enforce channel passwords, check $reg->getAdminPass() here.
+	// 3. Verify Password (Optional logic)
+	// If you want to require the password if one is set on the channel:
+	// if ($reg->getAdminPass() && $password !== $reg->getAdminPass()) {
+	//    $bot->notice($user, "Invalid channel password.");
+	//    return false;
+	// }
 
 	// 4. Perform Deletion
 	$chan_id = $reg->getId();
