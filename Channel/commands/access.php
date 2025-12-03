@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -28,115 +26,56 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-	$requestedWildcard = ('*' == $chan_name);
-	$userIsAdmin = (0 < $user_admin_level);
-
-	if (!$requestedWildcard && !($reg = $this->getChannelReg($chan_name))) {
-		$bot->noticef($user, '%s is not registered!', $chan_name);
+	
+	$chan_name = $pargs[1];
+	$mask = '*';
+	
+	if ($cmd_num_args > 1)
+		$mask = $pargs[2];
+	
+	$chan_reg = $this->getChannelReg($chan_name);
+	
+	if (!$chan_reg) {
+		$bot->noticef($user, 'Channel %s is not registered.', $chan_name);
 		return false;
 	}
 	
-	$n = 0;
-	$users = array();
-	$userMask = $pargs[2];
+	// Modernization: Escape input
+	$safe_id = db_escape($chan_reg->getId());
 	
-	$channels = array();
-	if ($requestedWildcard && $userIsAdmin) {
-		/** Admin user requested a wildcard search. **/
-		$tmpAccount = $this->getAccount($userMask);
-
-		if (!$tmpAccount) {
-			$bot->noticef($user, 'There is no user account named %s.', $userMask);
-			return false;
-		}
-
-		$channels = $this->db_channels;
-		$searchId = $tmpAccount->getId();
-	}
-	elseif ($requestedWildcard) {
-		/** Normal user requested a wildcard search. **/
-		$tmpAccount = $this->getAccount($userMask);
-		$userAccount = $this->getAccount($user->getAccountName());
-		
-		if (!$tmpAccount) {
-			$bot->noticef($user, 'There is no user account named %s.', $userMask);
-			return false;
-		}
-		elseif (!$userAccount || $tmpAccount->getId() != $userAccount->getId()) {
-			$bot->noticef($user, 'You can only search multiple channels for your own access records.');
-			return false;
-		}
-		
-		$channels = $this->db_channels;
-		$searchId = $tmpAccount->getId();
-	}
-	else {
-		/**
-		 * User didn't request a channel wildcard, so our only channel is
-		 * the specific one they wanted.
-		 */
-		$channels = array($reg);
-	}
+	// Modernization: Use PDO query
+	$res = db_query("SELECT * FROM channel_access WHERE chan_id = '$safe_id' ORDER BY level DESC");
 	
-	foreach ($channels as $tmpReg) {
-		if ($requestedWildcard && $tmpReg->getLevelById($tmpAccount->getId()) == 0) {
-			continue;
-		}
-
-		foreach ($tmpReg->getLevels() as $userId => $access) {
-			$tmpuser = $this->getAccountById($userId);
+	$access_list = array();
+	
+	// Modernization: Use fetch() loop instead of mysql_fetch_assoc
+	if ($res) {
+		while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+			$u = $this->getAccountById($row['user_id']);
 			
-			if (!$tmpuser) {
-				continue;
-			}
-			
-			$tmpname = $tmpuser->getName();
-			
-			if (strtolower($tmpname) == strtolower($userMask) || fnmatch($userMask, $tmpname)) {
-				$users[] = $access;
-				$n++;
+			// Only add to list if the account exists and matches the search mask
+			if ($u && ($mask == '*' || fnmatch($mask, $u->getName()))) {
+				$access_list[] = array(
+					'name' => $u->getName(), 
+					'level' => $row['level'], 
+					'suspend' => $row['suspend']
+				);
 			}
 		}
 	}
 
-	if (count($users) > 0) {
-		$userNum = 0;
-		
-		for ($i = 500; $i > 0; $i--) {
-			foreach ($users as $access) {
-				$level = $access->getLevel();
-				
-				if ($level == $i) {
-					$tmpuser = $this->getAccountById($access->getUserId());
-					$last_ts = $tmpuser->getLastseenTs();
+	if (empty($access_list)) {
+		$bot->noticef($user, 'No access records found for %s matching %s.', $chan_name, $mask);
+		return false;
+	}
 
-					if ($requestedWildcard) {
-						$tmpReg = $this->getChannelRegById($access->getChanId());
+	$bot->noticef($user, '%s  %5s  %-20s  %s%s', BOLD_START, 'Level', 'User', 'Status', BOLD_END);
+	$bot->noticef($user, str_repeat('-', 40));
 
-						$bot->noticef($user, '%3d) Channel: %s%s%s', 
-							++$userNum, BOLD_START, $tmpReg->getName(), BOLD_END);
-						$bot->noticef($user, '     User:    %s%-20s%s     Level: %s%3d%s', 
-							BOLD_START, $tmpuser->getName(), BOLD_END,
-							BOLD_START, $level, BOLD_END);
-					}
-					else {
-						$bot->noticef($user, '%3d) User:  %s%-20s%s     Level: %s%3d%s', 
-							++$userNum,
-							BOLD_START, $tmpuser->getName(), BOLD_END,
-							BOLD_START, $level, BOLD_END);
-					}
-
-					$bot->noticef($user, '     Auto-op: %-3s   Auto-voice: %-3s   Protect: %-3s', 
-						$access->autoOps() ? 'ON' : 'OFF',
-						$access->autoVoices() ? 'ON' : 'OFF',
-						$access->isProtected() ? 'ON' : 'OFF');
-					$bot->noticef($user, '     Last login: %s',
-						date('D j M Y H:i:s', $last_ts));
-					$bot->notice($user, ' ');
-				}
-			}
-		}
+	foreach ($access_list as $a) {
+		$status = ($a['suspend'] == 1) ? '[SUSPENDED]' : '';
+		$bot->noticef($user, '  %5d  %-20s  %s', $a['level'], $a['name'], $status);
 	}
 	
-	$bot->noticef($user, 'Found %d records matching your search.', $n);
+	$bot->noticef($user, '%d access records found.', count($access_list));
+?>

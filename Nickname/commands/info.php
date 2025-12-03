@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without 
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -29,56 +27,41 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
-	$user_name = $pargs[1];
-
-	if (!($account = $this->getAccount($user_name))) {
-		$bot->noticef($user, "%s is not a registered nick.", $user_name);
+	$target_name = $pargs[1];
+	$account = $this->getAccount($target_name);
+	
+	if (!$account) {
+		$bot->noticef($user, 'Account %s does not exist.', $target_name);
 		return false;
 	}
-
 	
-	$instances = array();
-	foreach ($this->users as $numeric => $tmp_user) {
-		if ($tmp_user->getAccountId() == $account->getId()) {
-			$instances[] = $tmp_user->getFullMaskSafe();
-		}
-	}
-
-	$is_admin = ($this->getUserLevel($user) > 1);
-	$privileged = $is_admin || $user->isOper() || ($account->getId() == $user->getAccountId());
-	$logged_in = !empty($instances);
-
-	$bot->noticef($user, 'Account information for %s%s%s', BOLD_START, $account->getName(), BOLD_END);
-	$bot->noticef($user, str_repeat('-', 70));
-
-	if ($privileged && $logged_in) {
-		$bot->noticef($user, 'Logged In:    %s - %s', $logged_in ? 'Yes' : 'No ', $instances[0]);
-		unset($instances[0]);
-
-		foreach ($instances as $mask)
-			$bot->noticef($user, '                    %s', $mask);
-	}
-	else {
-		$bot->noticef($user, 'Logged In:    %s', $logged_in ? 'Yes' : 'No ');
-	}
-
-	if ($privileged) {
-		$bot->noticef($user, 'E-mail Addr:  %s', $account->getEmail());
-		$bot->noticef($user, 'Enforcement:  %s       Auto Op: %s      Auto Voice: %s',
-				$account->enforcesNick() ? 'Yes' : 'No',
-				$account->autoOps()      ? 'Yes' : 'No',
-				$account->autoVoices()   ? 'Yes' : 'No'
-		);
-		$bot->noticef($user, 'Suspended:    %s       Permanent: %s',
-				$account->isSuspended()  ? 'Yes' : 'No',
-				$account->isPermanent()  ? 'Yes' : 'No'
-		);
+	$registered = date('M j Y H:i:s', $account->getRegisterTs());
+	$last_seen = 'Never';
+	if ($account->getLastseenTs() > 0)
+		$last_seen = date('M j Y H:i:s', $account->getLastseenTs());
+		
+	$bot->noticef($user, "%sAccount info for %s:%s", BOLD_START, $account->getName(), BOLD_END);
+	$bot->noticef($user, "  Registered: %s", $registered);
+	$bot->noticef($user, "  Last Seen:  %s", $last_seen);
+	
+	// Only show email to admins (Level >= 500) or the user themselves
+	$is_owner = ($user->isLoggedIn() && $user->getAccountId() == $account->getId());
+	$is_admin = ($this->getUserLevel($user) >= 500);
+	
+	if ($is_owner || $is_admin) {
+		$bot->noticef($user, "  E-mail:     %s", $account->getEmail());
 	}
 	
 	if ($account->hasInfoLine())
-		$bot->noticef($user, 'Info Line:    %s', $account->getInfoLine());
+		$bot->noticef($user, "  Info:       %s", $account->getInfoLine());
+		
+	// Handle Flags
+	$flags = array();
+	if ($account->isSuspended()) $flags[] = "Suspended";
+	if ($account->isPermanent()) $flags[] = "NoPurge";
+	if ($account->autoOps())     $flags[] = "AutoOp";
+	if ($account->autoVoices())  $flags[] = "AutoVoice";
 	
-	$bot->noticef($user, 'Registered:   %s', date('l j F Y h:i:s A T (\G\M\TO)', $account->getRegisterTs()));
-	$bot->noticef($user, 'Last Seen:    %s', date('l j F Y h:i:s A T (\G\M\TO)', $account->getLastseenTs()));
-
-
+	if (!empty($flags))
+		$bot->noticef($user, "  Flags:      %s", implode(', ', $flags));
+?>
