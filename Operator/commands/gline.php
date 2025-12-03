@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -29,50 +27,46 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+	if ($cmd_num_args < 3) {
+		$bot->notice($user, "Syntax: GLINE <mask> <duration> <reason>");
+		return false;
+	}
+
 	$mask = $pargs[1];
-	$duration = $pargs[2];
+	$duration_str = $pargs[2];
 	$reason = assemble($pargs, 3);
-	
-	if ($tmp_user = $this->getUserByNick($mask)) {
-		$mask = $tmp_user->getGlineMask();
-	}
-	elseif (!preg_match('/[@\.]/', $mask)) {
-		$bot->noticef($user, 'Gline masks must be in the ident@host form. Nick masks are not allowed.');
+
+	// Validate and convert duration (e.g., "1d" -> 86400)
+	$duration = convertDuration($duration_str);
+	if ($duration <= 0) {
+		$bot->notice($user, "Invalid duration specified (e.g. use 1h, 1d, 1w).");
 		return false;
 	}
-	
-	$affected_hosts = $this->getMatchingUserhostCount($mask);
-	$affected_ratio = ($affected_hosts / count($this->users)) * 100;
-	
-	if ($mask == '*@*' || $mask == '*@*.*') {
-		$bot->noticef($user, 'Your mask is not restrictive enough.');
+
+	// Check if G-Line already exists in memory
+	if ($this->getGline($mask)) {
+		$bot->noticef($user, "A G-Line for %s already exists.", $mask);
 		return false;
 	}
-	
-	if (!($duration_secs = convertDuration($duration))) {
-		$bot->notice($user, 'Invalid duration specified! See help for more details.');
-		return false;
-	}
-	
-	$max_ts = 2147483647;
-	$expire_ts = time() + $duration_secs;
-	$lifetime = $expire_ts;
-	
-	if ($expire_ts > $max_ts || $expire_ts < 0) {
-		$bot->noticef($user, 'The duration you specified is too large. Please try something more sensible.');
-		return false;
-	}
-	
-	if ($gline = $this->getGline($mask)) {
-		$gline->setDuration($duration_secs);
-		$gline->setReason($reason);
-		$gline->updateLastMod();
-		$gline->setActive();
-		
-		$this->serviceAddGline($gline);
-	}
-	else {
-		$gline = $this->addGline($mask, $duration_secs, time(), time(), $lifetime, $reason);
-	}
-	
-	$this->enforceGline($gline);
+
+	// Create and Save Database Record
+	// This uses the modern DB_Gline class we fixed earlier
+	$gline = new DB_Gline();
+	$gline->setMask($mask);
+	$gline->setReason($reason);
+	$gline->setDuration($duration);
+	$gline->setTs(time());
+	$gline->setLastMod(time());
+	$gline->setLifetime(time() + $duration);
+	$gline->setActiveState(true);
+	$gline->save();
+
+	// Add to Service Memory and Enforce on Network
+	$this->addGline($mask, $duration, time(), time(), time() + $duration, $reason, true);
+	$this->enforceGline($mask);
+
+	$bot->noticef($user, "G-Line added for %s (Expires in: %s)", $mask, $duration_str);
+
+	// Log action to network administrators
+	$this->sendf(FMT_WALLOPS, sprintf("G-Line for %s added by %s (%s)", $mask, $user->getNick(), $reason));
+?>
