@@ -38,18 +38,21 @@
 	$duration_str = $pargs[2];
 	$reason = assemble($pargs, 3);
 
+	// Validate and convert duration (e.g., "1d" -> 86400)
 	$duration = convertDuration($duration_str);
 	if ($duration <= 0) {
-		$bot->notice($user, "Invalid duration specified.");
+		$bot->notice($user, "Invalid duration specified (e.g. use 1h, 1d, 1w).");
 		return false;
 	}
 
+	// Check if Jupe already exists in memory
 	if ($this->getJupe($server)) {
 		$bot->noticef($user, "A Jupe for %s already exists.", $server);
 		return false;
 	}
 
-	// Create DB Record
+	// Create and Save Database Record
+	// This uses the modern DB_Jupe class we fixed earlier
 	$jupe = new DB_Jupe();
 	$jupe->setServer($server);
 	$jupe->setReason($reason);
@@ -60,9 +63,12 @@
 	$jupe->save();
 
 	// Add to Service Memory
+	// Note: Jupes are typically enforced via configuration or during the burst,
+	// but keeping it in memory allows the service to track expiry.
 	$this->addJupe($server, $duration, time(), time(), $reason, true);
-	
-	// Note: Jupes are usually enforced via internal server logic or burst
+
 	$bot->noticef($user, "Jupe added for %s (Expires in: %s)", $server, $duration_str);
+	
+	// Log action to network administrators
 	$this->sendf(FMT_WALLOPS, sprintf("Jupe for %s added by %s (%s)", $server, $user->getNick(), $reason));
 ?>
