@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,50 +29,46 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+	if ($cmd_num_args < 3) {
+		$bot->notice($user, "Syntax: MUTE <mask> <duration> <reason>");
+		return false;
+	}
+
 	$mask = $pargs[1];
-	$duration = $pargs[2];
+	$duration_str = $pargs[2];
 	$reason = assemble($pargs, 3);
-	
-	if ($tmpUser = $this->getUserByNick($mask)) {
-		$mask = $tmpUser->getMuteMask();
-	}
-	elseif (!preg_match('/[@\.]/', $mask)) {
-		$bot->noticef($user, 'Mute masks must be in the ident@host form. Nick masks are not allowed.');
+
+	// Validate and convert duration (e.g., "1d" -> 86400)
+	$duration = convertDuration($duration_str);
+	if ($duration <= 0) {
+		$bot->notice($user, "Invalid duration specified (e.g. use 1h, 1d, 1w).");
 		return false;
 	}
-	
-	$affectedHosts = $this->getMatchingUserhostCount($mask);
-	$affectedRatio = ($affectedHosts / count($this->users)) * 100;
-	
-	if ($mask == '*@*' || $mask == '*@*.*') {
-		$bot->noticef($user, 'Your mask is not restrictive enough.');
+
+	// Check if Mute already exists in memory
+	if ($this->getMute($mask)) {
+		$bot->noticef($user, "A Mute for %s already exists.", $mask);
 		return false;
 	}
+
+	// Create and Save Database Record
+	// This uses the modern DB_Mute class we fixed earlier
+	$mute = new DB_Mute();
+	$mute->setMask($mask);
+	$mute->setReason($reason);
+	$mute->setDuration($duration);
+	$mute->setTs(time());
+	$mute->setLastMod(time());
+	$mute->setLifetime(time() + $duration);
+	$mute->setActiveState(true);
+	$mute->save();
+
+	// Add to Service Memory and Enforce on Network
+	$this->addMute($mask, $duration, time(), time(), time() + $duration, $reason, true);
+	$this->enforceMute($mask);
+
+	$bot->noticef($user, "Mute added for %s (Expires in: %s)", $mask, $duration_str);
 	
-	if (!($durationSecs = convertDuration($duration))) {
-		$bot->notice($user, 'Invalid duration specified! See help for more details.');
-		return false;
-	}
-	
-	$maxTime = 2147483647;
-	$expireTime = time() + $durationSecs;
-	$lifetime = $expireTime;
-	
-	if ($expireTime > $maxTime || $expireTime < 0) {
-		$bot->noticef($user, 'The duration you specified is too large. Please try something more sensible.');
-		return false;
-	}
-	
-	if ($mute = $this->getMute($mask)) {
-		$mute->setDuration($durationSecs);
-		$mute->setReason($reason);
-		$mute->updateLastMod();
-		$mute->setActive();
-		
-		$this->serviceAddMute($mute);
-	}
-	else {
-		$mute = $this->addMute($mask, $durationSecs, time(), time(), $lifetime, $reason);
-	}
-	
-	$this->enforceMute($mute);
+	// Log action to network administrators
+	$this->sendf(FMT_WALLOPS, sprintf("Mute for %s added by %s (%s)", $mask, $user->getNick(), $reason));
+?>
