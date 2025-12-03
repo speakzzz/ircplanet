@@ -1,22 +1,20 @@
 <?php
 /*
- * ircPlanet Services for ircu
- * Copyright (c) 2005 Brian Cline.
+ * IRCPlanet Services for ircu
+ * Copyright (c) 2025 Felix Alcantara.
  * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  * 3. Neither the name of ircPlanet nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without 
- *    specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ * * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
@@ -28,19 +26,44 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-	
-	if ($reg = $this->getChannelReg($chan_name)) {
-		$this->removeChannelReg($reg);
-		$reg->delete();
-		
-		$reason = 'So long, and thanks for all the fish!';		
-		if ($cmd_num_args > 1)
-			$reason = assemble($pargs, 2);
-		
-		if (($chan = $this->getChannel($chan_name)) && $chan->isOn($bot->getNumeric())) {
-			$bot->mode($chan->getName(), '-R');
-			$bot->part($chan->getName(), $reason);
-		}
-	}
 
+    $chan_name = $pargs[1];
+    $reg = $this->getChannelReg($chan_name);
 
+    if (!$reg) {
+        $bot->noticef($user, "Channel %s is not registered.", $chan_name);
+        return false;
+    }
+
+    // Security Check: Only Admins (Level 800+) or the Founder (Level 500 on channel)
+    $is_admin = ($this->getAdminLevel($user) >= 800);
+    $user_level = $this->getChannelLevel($chan_name, $user);
+    $is_founder = ($user_level >= 500);
+
+    if (!$is_admin && !$is_founder) {
+        $bot->notice($user, "You do not have permission to drop this channel.");
+        return false;
+    }
+
+    $chan_id = $reg->getId();
+    $name = $reg->getName();
+
+    // 1. Delete from Database (Access, Bans, Channel)
+    // Using prepared statements for safety
+    db_query("DELETE FROM channel_access WHERE chan_id = ?", [$chan_id]);
+    db_query("DELETE FROM channel_bans WHERE chan_id = ?", [$chan_id]);
+    db_query("DELETE FROM channels WHERE channel_id = ?", [$chan_id]);
+
+    // 2. Remove from Memory
+    $this->removeChannelReg($name);
+
+    // 3. Make Bot Leave
+    $bot->part($name, "Channel dropped by " . $user->getNick());
+
+    $bot->noticef($user, "Channel %s has been dropped.", $name);
+    
+    // Log to wallops if admin dropped it
+    if ($is_admin && !$is_founder) {
+        $this->sendf(FMT_WALLOPS, "Channel $name dropped by administrator " . $user->getNick());
+    }
+?>

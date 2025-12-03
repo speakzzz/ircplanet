@@ -28,11 +28,26 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-	
-	/**
-	 * Save channels and accounts
-	 */
-	//foreach ($this->db_channels as $reg_key => $reg)
-	//	$reg->save();
-	
+
+$save_count = 0;
+
+    // Iterate through all registered channels loaded in memory
+    foreach ($this->db_channels as $name => $reg) {
+        // Only save if the record needs refreshing/saving
+        // (DB_Record's save method handles INSERT vs UPDATE automatically)
+        
+        // Update the Last Active Time from the live channel object if it exists
+        $live_chan = $this->getChannel($name);
+        if ($live_chan) {
+            // Update stats or last active timestamp if tracking usage
+            // $reg->setLastActivityTime(time());
+        }
+
+        $reg->save();
+        $save_count++;
+    }
+    
+    // Optional: Debug log to confirm it's running
+    // debug("Saved data for $save_count channels.");
+?>
 
