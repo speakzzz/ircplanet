@@ -1,9 +1,9 @@
 <?php
 /*
  * IRCPlanet Services for ircu
- * Copyright (c) 2025 Felix Alcantara.
+ * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * Redistribution and use in source and binary forms, with or without
+ * * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
@@ -27,43 +27,48 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-    $chan_name = $pargs[1];
-    $reg = $this->getChannelReg($chan_name);
+	$chan_name = $pargs[1];
+	$reg = $this->getChannelReg($chan_name);
 
-    if (!$reg) {
-        $bot->noticef($user, "Channel %s is not registered.", $chan_name);
-        return false;
-    }
+	if (!$reg) {
+		$bot->noticef($user, "Channel %s is not registered.", $chan_name);
+		return false;
+	}
 
-    // Security Check: Only Admins (Level 800+) or the Founder (Level 500 on channel)
-    $is_admin = ($this->getAdminLevel($user) >= 800);
-    $user_level = $this->getChannelLevel($chan_name, $user);
-    $is_founder = ($user_level >= 500);
+	// Permissions: Services Admin (Level 800+) OR Channel Founder (Level 500)
+	$is_admin = ($this->getAdminLevel($user) >= 800);
+	$user_level = $this->getChannelLevel($chan_name, $user);
+	$is_founder = ($user_level >= 500);
 
-    if (!$is_admin && !$is_founder) {
-        $bot->notice($user, "You do not have permission to drop this channel.");
-        return false;
-    }
+	if (!$is_admin && !$is_founder) {
+		$bot->notice($user, "You do not have permission to drop this channel.");
+		return false;
+	}
 
-    $chan_id = $reg->getId();
-    $name = $reg->getName();
+	$chan_id = $reg->getId();
+	$name = $reg->getName();
 
-    // 1. Delete from Database (Access, Bans, Channel)
-    // Using prepared statements for safety
-    db_query("DELETE FROM channel_access WHERE chan_id = ?", [$chan_id]);
-    db_query("DELETE FROM channel_bans WHERE chan_id = ?", [$chan_id]);
-    db_query("DELETE FROM channels WHERE channel_id = ?", [$chan_id]);
+	// 1. Delete from Database using Prepared Statements
+	// This removes access lists, bans, and the channel record itself
+	db_query("DELETE FROM channel_access WHERE chan_id = ?", [$chan_id]);
+	db_query("DELETE FROM channel_bans WHERE chan_id = ?", [$chan_id]);
+	db_query("DELETE FROM channels WHERE channel_id = ?", [$chan_id]);
 
-    // 2. Remove from Memory
-    $this->removeChannelReg($name);
+	// 2. Remove from Memory
+	$this->removeChannelReg($name);
 
-    // 3. Make Bot Leave
-    $bot->part($name, "Channel dropped by " . $user->getNick());
+	// 3. Bot Leaves Channel
+	$bot->part($name, "Channel dropped by " . $user->getNick());
 
-    $bot->noticef($user, "Channel %s has been dropped.", $name);
-    
-    // Log to wallops if admin dropped it
-    if ($is_admin && !$is_founder) {
-        $this->sendf(FMT_WALLOPS, "Channel $name dropped by administrator " . $user->getNick());
-    }
+	// 4. Clean up modes (remove +r flag if channel exists)
+	if ($chan = $this->getChannel($name)) {
+		$this->mode($name, '-r');
+	}
+
+	$bot->noticef($user, "Channel %s has been dropped.", $name);
+	
+	// Log to Wallops if an Admin (who isn't the founder) dropped it
+	if ($is_admin && !$is_founder) {
+		$this->sendf(FMT_WALLOPS, sprintf("Channel %s dropped by administrator %s", $name, $user->getNick()));
+	}
 ?>
