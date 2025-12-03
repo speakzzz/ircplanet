@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,29 +29,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+	if ($cmd_num_args < 3) {
+		$bot->notice($user, "Syntax: JUPE <server> <duration> <reason>");
+		return false;
+	}
+
 	$server = $pargs[1];
-	$duration = $pargs[2];
-	$last_mod = time();
+	$duration_str = $pargs[2];
 	$reason = assemble($pargs, 3);
 
-	if ($jupe = $this->getJupe($server)) {
-		$bot->noticef($user, 'A jupe already exists for %s.', $jupe->getServer());
+	$duration = convertDuration($duration_str);
+	if ($duration <= 0) {
+		$bot->notice($user, "Invalid duration specified.");
 		return false;
 	}
-	
-	if (!($duration_secs = convertDuration($duration))) {
-		$bot->notice($user, 'Invalid duration specified! See help for more details.');
+
+	if ($this->getJupe($server)) {
+		$bot->noticef($user, "A Jupe for %s already exists.", $server);
 		return false;
 	}
+
+	// Create DB Record
+	$jupe = new DB_Jupe();
+	$jupe->setServer($server);
+	$jupe->setReason($reason);
+	$jupe->setDuration($duration);
+	$jupe->setTs(time());
+	$jupe->setLastMod(time());
+	$jupe->setActiveState(true);
+	$jupe->save();
+
+	// Add to Service Memory
+	$this->addJupe($server, $duration, time(), time(), $reason, true);
 	
-	$max_ts = 2147483647;
-	$expire_ts = time() + $duration_secs;
-	
-	if ($expire_ts > $max_ts || $expire_ts < 0) {
-		$bot->noticef($user, 'The duration you specified is too large. Please try something more sensible.');
-		return false;
-	}
-	
-	$jupe = $this->addJupe($server, $duration_secs, time(), $last_mod, $reason);
-	
-	$this->enforceJupe($jupe);	
+	// Note: Jupes are usually enforced via internal server logic or burst
+	$bot->noticef($user, "Jupe added for %s (Expires in: %s)", $server, $duration_str);
+	$this->sendf(FMT_WALLOPS, sprintf("Jupe for %s added by %s (%s)", $server, $user->getNick(), $reason));
+?>
