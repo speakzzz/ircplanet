@@ -51,19 +51,47 @@
 		return false;
 	}
 	
-	// 3. Check Status (Prevent toggling)
+	// 3. Check Status
 	if ($reg->isSuspended()) {
 		$bot->noticef($user, "Channel %s is already suspended.", $chan_name);
 		return false;
 	}
 	
-	// 4. Perform Suspension
+	// 4. Perform Suspension (DB Update)
 	$reg->setSuspend(true);
 	$reg->save();
 	
-	// 5. Action: Kick bot out and lock down
-	$bot->part($chan_name, "Channel Suspended by " . $user->getNick() . ": " . $reason);
-	$this->clearModes($chan_name);
+	// 5. Action: Secure the Channel
+	$chan = $this->getChannel($chan_name);
+	
+	// Ensure bot is in the channel
+	if (!$bot->isOn($chan_name)) {
+		$bot->join($chan_name);
+		$this->mode($chan_name, "+Ro " . $bot->getNumeric());
+	}
+	
+	if ($chan) {
+		// A. Deop Everyone (except the bot)
+		$ops = $chan->getOpList();
+		$deop_list = array();
+		
+		foreach ($ops as $op_num) {
+			if ($op_num != $bot->getNumeric()) {
+				$deop_list[] = $op_num;
+			}
+		}
+		
+		if (!empty($deop_list)) {
+			$bot->deop($chan_name, $deop_list);
+		}
+		
+		// B. Set Suspension Topic
+		$suspend_topic = "Channel has been suspended for: $reason. Contact a Service Administrator for assistance.";
+		$bot->topic($chan_name, $suspend_topic);
+		
+		// C. Lock Modes (Optional: Set +im to prevent talking/joining)
+		// $bot->mode($chan_name, "+im"); 
+	}
 	
 	$bot->noticef($user, "Channel %s has been suspended.", $chan_name);
 	
