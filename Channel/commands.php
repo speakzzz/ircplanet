@@ -41,6 +41,7 @@
 	$this->setCommandInfo('addadmin',       800,   2, false, '<user> <level>');
 	$this->setCommandInfo('deladmin',       800,   1, false, '<user>');
 	$this->setCommandInfo('suspend', 		800,   2, false, '<channel> <reason>');
+	$this->setCommandInfo('unsuspend', 		800,   1, false, '<channel> [reason]');
 
 	$this->setCommandInfo('addbad',         700,   1, false, '<channel mask>');
 	$this->setCommandInfo('adminreg',       700,   2, false, '<channel> <owner> [purpose]');
