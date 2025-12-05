@@ -26,10 +26,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-	
+
 	require_once('db_channel_access.php');
 	require_once('db_ban.php');
-	
+
 	define('MAXLEN_CHAN_PURPOSE',        200);
 	define('MAXLEN_CHAN_URL',            255);
 	define('MAXLEN_CHAN_DEFAULT_TOPIC',  255);
@@ -38,8 +38,8 @@
 	define('MAX_CHAN_AUTOLIMIT_BUFFER',  100);
 	define('MIN_CHAN_AUTOLIMIT_WAIT',      1);
 	define('MAX_CHAN_AUTOLIMIT_WAIT',    300);
-	
-	class DB_Channel extends DB_Record 
+
+	class DB_Channel extends DB_Record
 	{
 		protected $_table_name = 'channels';
 		protected $_key_field = 'channel_id';
@@ -47,19 +47,20 @@
 		protected $_exclude_from_update = array('levels', 'bans', 'lastActivityTime', 'lastAutoTopicTime', 'lastTopic');
 		protected $_insert_timestamp_field = 'create_date';
 		protected $_update_timestamp_field = 'update_date';
-		
+
 		protected $channel_id = 0;
 		protected $name = '';
 		protected $register_ts = 0;
 		protected $create_ts = 0;
 		protected $purpose = '';
-		
+
 		protected $url = '';
 		protected $def_topic = '';
 		protected $def_modes = '';
 		protected $info_lines = 0;
 		protected $suspend = 0;
 		protected $no_purge = 0;
+		protected $suspend_reason = '';
 		protected $auto_op = 1;
 		protected $auto_op_all = 0;
 		protected $auto_voice = 0;
@@ -75,32 +76,32 @@
 		protected $topic_lock = 0;
 		protected $no_op = 0;
 		protected $no_voice = 0;
-		
+
 		// PHP 8 Compatibility: Explicitly declare timestamps
 		protected $register_date = null;
 		protected $create_date = null;
 		protected $update_date = null;
-		
+
 		protected $levels = array();
 		protected $bans = array();
-		
+
 		protected $lastActivityTime = 0;
 		protected $lastAutoTopicTime = 0;
 		protected $lastTopic = '';
-		
+
 		function recordConstruct($args)
 		{
 			if (count($args) > 1) {
 				$name = $args[0];
 				$owner_id = $args[1];
 			}
-			
+
 			if (!empty($name)) {
 				$this->name = $name;
 				$this->register_ts = time();
 				$this->register_date = db_date();
 			}
-			
+
 			if (isset($owner_id) && $owner_id > 0) {
 				$this->save();
 				$owner = new DB_Channel_Access();
@@ -110,16 +111,17 @@
 				$this->addAccess($owner);
 			}
 		}
-		
+
 		function recordDestruct()
 		{
 		}
-		
+
 
 		function hasDefaultTopic()        { return !empty($this->def_topic); }
 		function hasDefaultModes()        { return !empty($this->def_modes); }
 		function showsInfoLines()         { return 1 == $this->info_lines; }
 		function isSuspended()            { return 1 == $this->suspend; }
+		function getSuspendReason()       { return $this->suspend_reason; }
 		function isPermanent()            { return 1 == $this->no_purge; }
 		function autoOps()                { return 1 == $this->auto_op; }
 		function autoOpsAll()             { return 1 == $this->auto_op_all; }
@@ -134,7 +136,7 @@
 		function topicLock()              { return 1 == $this->topic_lock; }
 		function noOps()                  { return 1 == $this->no_op; }
 		function noVoices()               { return 1 == $this->no_voice; }
-		
+
 		function getId()                  { return $this->channel_id; }
 		function getName()                { return $this->name; }
 		function getRegisterTs()          { return $this->register_ts; }
@@ -145,24 +147,24 @@
 		function getDefaultModes()        { return $this->def_modes; }
 		function getAutoLimitBuffer()     { return $this->auto_limit_buffer; }
 		function getAutoLimitWait()       { return $this->auto_limit_wait; }
-		
+
 		function getLevels()              { return $this->levels; }
-		
+
 		function isActive()               { return time() - $this->lastActivityTime <= (30 * 60); }
-		
+
         // FIX: Added missing getter method
         function getLastActivityTime()    { return $this->lastActivityTime; }
-		
+
         function setLastActivityTime($n)  { $this->lastActivityTime = $n; }
 		function getLastAutoTopicTime()   { return $this->lastAutoTopicTime; }
 		function setLastAutoTopicTime($n) { $this->lastAutoTopicTime = $n; }
-		
+
 		function getLastTopic()           { return $this->lastTopic; }
 		function setLastTopic($s)         { $this->lastTopic = $s; }
-		
+
 		function hasPendingAutolimit()    { return isset($this->_alimit_pending) && $this->_alimit_pending; }
 		function setPendingAutolimit($b)  { $this->_alimit_pending = $b; }
-		
+
 		function setCreateTs($n)          { $this->create_ts = $n; }
 		function setRegisterDate($d)      { $this->register_date = $d; }
 		function setPurpose($s)           { $this->purpose = $s; }
@@ -171,6 +173,7 @@
 		function setDefaultModes($s)      { $this->def_modes = $s; }
 		function setInfoLines($b)         { $this->info_lines = $b ? 1 : 0; }
 		function setSuspend($b)           { $this->suspend = $b ? 1 : 0; }
+		function setSuspendReason($s)     { $this->suspend_reason = $s; }
 		function setPermanent($b)         { $this->no_purge = $b ? 1 : 0; }
 		function setAutoOp($b)            { $this->auto_op = $b ? 1 : 0; }
 		function setAutoOpAll($b)         { $this->auto_op_all = $b ? 1 : 0; }
@@ -187,14 +190,14 @@
 		function setTopicLock($b)         { $this->topic_lock = $b ? 1 : 0; }
 		function setNoOp($b)              { $this->no_op = $b ? 1 : 0; }
 		function setNoVoice($b)           { $this->no_voice = $b ? 1 : 0; }
-		
-		
+
+
 		function addAccess($access_obj)
 		{
 			$user_id = $access_obj->getUserId();
 			$this->levels[$user_id] = $access_obj;
 		}
-		
+
 		function removeAccess($user_id)
 		{
 			if (array_key_exists($user_id, $this->levels)) {
@@ -202,32 +205,32 @@
 				unset($this->levels[$user_id]);
 			}
 		}
-		
-		
+
+
 		function getLevelById($user_id)
 		{
 			if (array_key_exists($user_id, $this->levels))
 				return $this->levels[$user_id]->getLevel();
-			
+
 			return 0;
 		}
-		
-		
+
+
 		function addBan($ban_obj)
 		{
 			$mask = strtolower($ban_obj->getMask());
 			$this->bans[$mask] = $ban_obj;
 		}
-		
+
 		function getBan($mask)
 		{
 			$mask = strtolower($mask);
 			if (array_key_exists($mask, $this->bans))
 				return $this->bans[$mask];
-			
+
 			return false;
 		}
-		
+
 		function removeBan($mask)
 		{
 			$mask = strtolower($mask);
@@ -236,7 +239,7 @@
 				unset($this->bans[$mask]);
 			}
 		}
-		
+
 		function clearBans()
 		{
 			foreach ($this->bans as $mask => $ban)
@@ -244,100 +247,100 @@
 
 			$this->bans = array();
 		}
-		
+
 		function countMatchingBans($mask)
 		{
 			if (is_object($mask))
 				return $this->countMatchingBans($mask->getFullMask());
-			
+
 			$match_count = 0;
 			$mask = strtolower($mask);
-			
+
 			foreach ($this->bans as $mask_iter => $ban) {
 				if (fnmatch($mask_iter, $mask))
 					$match_count++;
 			}
-			
+
 			return $match_count;
 		}
-		
+
 		function hasMatchingBans($mask)
 		{
 			if (is_object($mask))
 				return $this->hasMatchingBans($mask->getFullMask());
-			
+
 			$mask = strtolower($mask);
-			
+
 			foreach ($this->bans as $mask_iter => $ban) {
 				if (fnmatch($mask_iter, $mask))
 					return true;
 			}
-			
+
 			return false;
 		}
-		
+
 		function getMatchingBan($mask)
 		{
 			if (is_object($mask))
 				return $this->getMatchingBan($mask->getFullMask());
-			
+
 			$mask = strtolower($mask);
-			
+
 			foreach ($this->bans as $mask_iter => $ban) {
 				if (fnmatch($mask_iter, $mask))
 					return $ban;
 			}
-			
+
 			return false;
 		}
-		
-		
+
+
 		function getMatchingBans($mask = '*')
 		{
 			if (is_object($mask))
 				return $this->getMatchingBans($mask->getFullMask());
-			
+
 			$matches = array();
 			$mask = strtolower($mask);
-			
+
 			foreach ($this->bans as $mask_iter => $ban) {
 				if ($mask == '*' || fnmatch($mask, $mask_iter))
 					$matches[$mask_iter] = $ban;
 			}
-			
+
 			if (count($matches) == 0)
 				return false;
-			
+
 			return $matches;
 		}
-		
-		
+
+
 		function recordSave()
 		{
 			foreach ($this->levels as $user_id => $access) {
 				if (empty($user_id) || $user_id == 0 || $this->channel_id == 0)
 					continue;
-				
+
 				$access->save();
 			}
-			
+
 			foreach ($this->bans as $mask => $ban) {
 				if (empty($mask) || !isBanRecord($ban) || $this->channel_id == 0)
 					continue;
-				
+
 				$ban->save();
 			}
 		}
-		
-		
+
+
 		function recordDelete()
 		{
 			foreach ($this->bans as $mask => $ban)
 				$ban->delete();
-			
+
 			foreach ($this->levels as $user_id => $access)
 				$access->delete();
 		}
-		
+
 	}
 ?>

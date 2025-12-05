@@ -59,6 +59,7 @@
 	
 	// 4. Unsuspend
 	$reg->setSuspend(false);
+	$reg->setSuspendReason(''); // Clear the reason
 	$reg->save();
 	
 	// 5. Restore Channel
