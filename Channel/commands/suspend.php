@@ -61,11 +61,10 @@
 	
 	// 4. Action
 	if ($new_state) {
-		// If suspending, kick the bot out and join/part to clear modes/users if needed
-		// For now, we just leave a message.
+		// If suspending, kick the bot out and leave a message
 		$bot->part($chan_name, "Channel Suspended by " . $user->getNick() . ": " . $reason);
 		
-		// Clear modes to lock it down (optional, but recommended)
+		// Clear modes to lock it down
 		$this->clearModes($chan_name);
 	} else {
 		// If unsuspending, join the bot back
@@ -75,7 +74,7 @@
 	
 	$bot->noticef($user, "Channel %s has been %s.", $chan_name, $action);
 	
-	// Log it to Wallops so other admins see it
-	$this->sendf(FMT_WALLOPS, sprintf("Channel %s %s by administrator %s (%s)", 
+	// FIX: Added SERVER_NUM as the first argument for FMT_WALLOPS
+	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Channel %s %s by administrator %s (%s)", 
 		$chan_name, $action, $user->getNick(), $reason));
 ?>
