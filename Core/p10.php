@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -76,6 +76,10 @@
 	define('FMT_XQUERY',           '%s XQ %s %s :%s');
 	define('FMT_XREPLY',           '%s XR %s %s :%s');
 	
+	// FIX: Added missing WALLOPS constant
+	define('FMT_WALLOPS',          "%s WA :%s");
+	define('FMT_DESYNCH',          "%s DS :%s");
+
 	define('FMT_NOSUCHNICK',       "%s 401 %s %s :No such nick");
 	
 	define('FMT_ADMIN_REPLY_1',    "%s 256 %s :%s");
@@ -182,5 +186,4 @@
 		return long2ip($i);
 	}
 
-	
-
+?>
