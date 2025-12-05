@@ -36,7 +36,62 @@
 	if (strlen($source) == 5)
 		$source = $this->getUser($source);
 	
+	// Basic checks: Source is a user, not a service, and target is a registered channel
 	if (isUser($source) && !$source->isService() && $target_is_chan && $this->isChannelRegistered($target)) {
+		
+		$reg = $this->getChannelReg($target);
+
+		// --- SUSPENSION ENFORCEMENT START ---
+		if ($reg && $reg->isSuspended()) {
+			// Allow Services Admins (Level 800+) to override
+			$is_admin = ($this->getAdminLevel($source) >= 800);
+			
+			if (!$is_admin) {
+				$revert_modes = '';
+				$revert_args = '';
+				$mode_add = true;
+				$arg_index = 3;
+				$modes = $args[3];
+				
+				// Parse the modes being set
+				for ($i = 0; $i < strlen($modes); $i++) {
+					$mode = $modes[$i];
+					
+					if ($mode == '+') { $mode_add = true; continue; }
+					if ($mode == '-') { $mode_add = false; continue; }
+					
+					// Get argument if applicable (o, v, b, l, k always consume args in P10 usually)
+					$arg = '';
+					if (strpos('ovblk', $mode) !== false) {
+						$arg = $args[$arg_index++];
+					}
+
+					// If adding Op, Voice, or Ban -> REVERT IT
+					if ($mode_add && ($mode == 'o' || $mode == 'v' || $mode == 'b')) {
+						$revert_modes .= $mode; // We will prepend '-'
+						$revert_args .= $arg .' ';
+					}
+                    // If removing Op/Voice/Ban -> REVERT IT (Prevent changing state at all)
+                    elseif (!$mode_add && ($mode == 'o' || $mode == 'v' || $mode == 'b')) {
+                        // Only revert if we can (re-opping might be dangerous, but preventing unban is good)
+                        // For safety, let's just block ADDING powers/bans mostly.
+                        // Uncomment next lines to strictly lock state:
+                        // $this->default_bot->mode($target, "+$mode $arg");
+                    }
+				}
+				
+				if (!empty($revert_modes)) {
+					// Send Reversal: -ovb...
+					$this->default_bot->mode($target, '-' . $revert_modes . ' ' . $revert_args);
+					$this->default_bot->notice($source, "Channel is suspended. Mode changes are not allowed.");
+				}
+				
+				// STOP processing. Do not run the standard "protect users" logic below.
+				return;
+			}
+		}
+		// --- SUSPENSION ENFORCEMENT END ---
+
 		$bans_to_check = array();
 		$users_to_check = array();
 		$users_to_reop = array();
@@ -72,13 +127,13 @@
 						|| fnmatch($tmp_mask, $tmp_user->getFullIpMask()))
 				{
 					$deop_source = true;
-					$bot->unban($target, $tmp_mask);
+					$this->default_bot->unban($target, $tmp_mask);
 				}
 			}
 		}
 		
 		foreach ($users_to_check as $tmp_target) {
-			if (!isUser($tmp_target) || !$tmp_user->isLoggedIn())
+			if (!isUser($tmp_target) || !$tmp_target->isLoggedIn())
 				continue;
 			
 			$tmp_access = $this->getChannelAccess($target, $tmp_target);
@@ -86,7 +141,7 @@
 				continue;
 
 			if ($tmp_access->isProtected() && 
-					(!$source_access || $source_access->getLevel() <= $tmp_target->getLevel()))
+					(!$source_access || $source_access->getLevel() <= $tmp_access->getLevel()))
 			{
 				$users_to_reop[] = $tmp_target;
 				$deop_source = true;
@@ -113,5 +168,4 @@
 			$this->default_bot->mode($target, $mode_change);
 		}
 	}
-
-
+?>
