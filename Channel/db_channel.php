@@ -1,9 +1,9 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
- * * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
 
  * 1. Redistributions of source code must retain the above copyright notice,
@@ -76,7 +76,7 @@
 		protected $no_op = 0;
 		protected $no_voice = 0;
 		
-		// Fix: Declare these properties explicitly for PHP 8+ compatibility
+		// PHP 8 Compatibility: Explicitly declare timestamps
 		protected $register_date = null;
 		protected $create_date = null;
 		protected $update_date = null;
@@ -149,7 +149,11 @@
 		function getLevels()              { return $this->levels; }
 		
 		function isActive()               { return time() - $this->lastActivityTime <= (30 * 60); }
-		function setLastActivityTime($n)  { $this->lastActivityTime = $n; }
+		
+        // FIX: Added missing getter method
+        function getLastActivityTime()    { return $this->lastActivityTime; }
+		
+        function setLastActivityTime($n)  { $this->lastActivityTime = $n; }
 		function getLastAutoTopicTime()   { return $this->lastAutoTopicTime; }
 		function setLastAutoTopicTime($n) { $this->lastAutoTopicTime = $n; }
 		
