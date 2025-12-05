@@ -34,7 +34,6 @@
 	 */
 	if (!isset($is_secure) || !$is_secure) {
 		$bot->notice($user, "For security reasons, you must log in using the secure syntax:");
-		// UPDATED: Suggest LOGIN <account> <password> explicitly
 		$bot->noticef($user, "/msg %s@%s LOGIN <account> <password>", $bot->getNick(), SERVER_NAME);
 		return false;
 	}
@@ -49,39 +48,66 @@
 	}
 	
 	if ($account = $this->getAccount($user_name)) {
-		// Modernization: Use password_verify instead of md5 comparison
-		if (!password_verify($password, $account->getPassword())) {
-			$bot->notice($user, "Invalid password!");
-			return false;
-		}
-		elseif ($account->isSuspended()) {
-			$bot->noticef($user, "Your account is suspended.");
-			return false;
-		}
-		elseif ($user->isLoggedIn()) {
-			$bot->notice($user, "You are already logged in as ". $user->getAccountName() ."!");
-			return false;
-		}
+		$stored_pass = $account->getPassword();
+		$login_success = false;
+		$rehash_needed = false;
 
-		$user_name = $account->getName();
-		$bot->notice($user, "Authentication successful as $user_name!");
-		
-		/**
-		 * Always send the AC token last as it will activate the default hidden host
-		 * unless a fakehost is already set.
-		 */
-		if ($account->hasFakehost()) {
-			$this->sendf(FMT_FAKEHOST, SERVER_NUM, $user->getNumeric(), $account->getFakehost());
-			
-			if (!$user->hasMode(UMODE_HIDDENHOST)) {
-				$bot->noticef($user, 'Enable user mode +x (/mode %s +x) in order to cloak your host.',
-					$user->getNick());
+		// 1. Check Modern Hash (Bcrypt/Argon2)
+		if (password_verify($password, $stored_pass)) {
+			$login_success = true;
+			// Check if the hash needs updating (e.g., algorithm changed or cost increased)
+			if (password_needs_rehash($stored_pass, PASSWORD_DEFAULT)) {
+				$rehash_needed = true;
 			}
 		}
+		// 2. Check Legacy Hash (MD5) - MIGRATION LOGIC
+		// MD5 hashes are always 32 hex characters. If it matches, we migrate it.
+		elseif (strlen($stored_pass) === 32 && md5($password) === $stored_pass) {
+			$login_success = true;
+			$rehash_needed = true; // Force upgrade to secure hash
+		}
 
-		$this->sendf(FMT_ACCOUNT, SERVER_NUM, $user->getNumeric(), $user_name, $account->getRegisterTs());
-		$user->setAccountName($user_name);
-		$user->setAccountId($account->getId());
+		if ($login_success) {
+			if ($account->isSuspended()) {
+				$bot->noticef($user, "Your account is suspended.");
+				return false;
+			}
+			elseif ($user->isLoggedIn()) {
+				$bot->notice($user, "You are already logged in as ". $user->getAccountName() ."!");
+				return false;
+			}
+
+			// Perform Automatic Migration or Rehash
+			if ($rehash_needed) {
+				$new_hash = password_hash($password, PASSWORD_DEFAULT);
+				$account->setPassword($new_hash);
+				$account->save();
+				// debug("Security: Migrated/Rehashed password for user " . $account->getName());
+			}
+
+			$user_name = $account->getName();
+			$bot->notice($user, "Authentication successful as $user_name!");
+			
+			/**
+			 * Always send the AC token last as it will activate the default hidden host
+			 * unless a fakehost is already set.
+			 */
+			if ($account->hasFakehost()) {
+				$this->sendf(FMT_FAKEHOST, SERVER_NUM, $user->getNumeric(), $account->getFakehost());
+				
+				if (!$user->hasMode(UMODE_HIDDENHOST)) {
+					$bot->noticef($user, 'Enable user mode +x (/mode %s +x) in order to cloak your host.',
+						$user->getNick());
+				}
+			}
+
+			$this->sendf(FMT_ACCOUNT, SERVER_NUM, $user->getNumeric(), $user_name, $account->getRegisterTs());
+			$user->setAccountName($user_name);
+			$user->setAccountId($account->getId());
+		}
+		else {
+			$bot->notice($user, "Invalid password!");
+		}
 	}
 	else {
 		$bot->notice($user, "No such account!");
