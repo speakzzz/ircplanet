@@ -74,8 +74,8 @@
 	
 	$bot->noticef($user, "Channel %s has been %s.", $chan_name, $action);
 	
-	// FIX: Added SERVER_NUM as the first argument for FMT_WALLOPS
-	// Previously: $this->sendf(FMT_WALLOPS, sprintf(...)); -> caused error
+	// CRITICAL FIX: Pass SERVER_NUM as the first argument
+	// Format is: %s WA :%s  (Source, Message)
 	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Channel %s %s by administrator %s (%s)", 
 		$chan_name, $action, $user->getNick(), $reason));
 ?>
