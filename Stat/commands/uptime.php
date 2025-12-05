@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,10 +29,27 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
-	$uptime = getUptimeInfo();
-	$bot->notice($user, BOLD_START .'Uptime:'. BOLD_END .' '. $uptime['pretty']);
-	$bot->notice($user, BOLD_START .'Bandwidth:'. BOLD_END .' '.
-		getPrettySize($this->bytes_received) .' received, '.
-		getPrettySize($this->bytes_sent) .' sent');
+	$uptime = time() - START_TIME;
+	$days = floor($uptime / 86400);
+	$hours = floor(($uptime % 86400) / 3600);
+	$mins = floor(($uptime % 3600) / 60);
+	$secs = $uptime % 60;
 
+	$bot->noticef($user, "Service Uptime: %d day%s, %02d:%02d:%02d", 
+		$days, ($days != 1 ? 's' : ''), $hours, $mins, $secs);
 
+	$bot->noticef($user, "Current Stats: %d users, %d channels, %d servers", 
+		count($this->users), count($this->channels), count($this->servers));
+
+	// Modernization: Use PDO to find Max Users record
+	// We order by 'users' DESC to get the highest count
+	$res = db_query("SELECT users, date FROM stats_history ORDER BY users DESC LIMIT 1");
+	
+	if ($res && $res->rowCount() > 0) {
+		$row = $res->fetch(PDO::FETCH_ASSOC);
+		$max_users = $row['users'];
+		$date = date("M j Y H:i:s", strtotime($row['date']));
+		
+		$bot->noticef($user, "Max Users: %d (on %s)", $max_users, $date);
+	}
+?>
