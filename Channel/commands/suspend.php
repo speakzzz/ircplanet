@@ -46,36 +46,28 @@
 	}
 	
 	// 2. Verify Admin Access (Level 800+)
-	// Only network admins should be able to suspend channels.
 	if ($this->getAdminLevel($user) < 800) {
 		$bot->notice($user, "You do not have permission to suspend channels.");
 		return false;
 	}
 	
-	// 3. Toggle Suspend Status
-	$new_state = !$reg->isSuspended();
-	$reg->setSuspend($new_state);
-	$reg->save();
-	
-	$action = $new_state ? "suspended" : "unsuspended";
-	
-	// 4. Action
-	if ($new_state) {
-		// If suspending, kick the bot out and leave a message
-		$bot->part($chan_name, "Channel Suspended by " . $user->getNick() . ": " . $reason);
-		
-		// Clear modes to lock it down
-		$this->clearModes($chan_name);
-	} else {
-		// If unsuspending, join the bot back
-		$bot->join($chan_name);
-		$this->mode($chan_name, "+Ro " . $bot->getNumeric());
+	// 3. Check Status (Prevent toggling)
+	if ($reg->isSuspended()) {
+		$bot->noticef($user, "Channel %s is already suspended.", $chan_name);
+		return false;
 	}
 	
-	$bot->noticef($user, "Channel %s has been %s.", $chan_name, $action);
+	// 4. Perform Suspension
+	$reg->setSuspend(true);
+	$reg->save();
 	
-	// CRITICAL FIX: Pass SERVER_NUM as the first argument
-	// Format is: %s WA :%s  (Source, Message)
-	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Channel %s %s by administrator %s (%s)", 
-		$chan_name, $action, $user->getNick(), $reason));
+	// 5. Action: Kick bot out and lock down
+	$bot->part($chan_name, "Channel Suspended by " . $user->getNick() . ": " . $reason);
+	$this->clearModes($chan_name);
+	
+	$bot->noticef($user, "Channel %s has been suspended.", $chan_name);
+	
+	// Log to Wallops
+	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Channel %s suspended by administrator %s (%s)", 
+		$chan_name, $user->getNick(), $reason));
 ?>
