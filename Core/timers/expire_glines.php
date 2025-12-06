@@ -29,20 +29,28 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
-	/**
-	 * Check for expired glines
-	 */
-	
-	$expired_glines = array();
-
-	foreach ($this->glines as $gline_key => $gline) {
-		if ($gline->hasExceededLifetime()) {
-			debugf('*** Removing expired G-line %s', $gline->getMask());
-			$expired_glines[] = $gline_key;
+	// Iterate through all active G-Lines in memory
+	foreach ($this->glines as $mask => $gline) {
+		// Check if the ban has expired
+		if ($gline->isExpired()) {
+			$gline_key = strtolower($mask);
+			
+			// 1. Remove from Database safely
+			// We use db_escape to prevent SQL injection issues with the mask
+			$safe_mask = db_escape($mask);
+			db_query("DELETE FROM os_glines WHERE mask = '$safe_mask'");
+			
+			// 2. Broadcast Removal to Network (GL -)
+			// This tells the IRCd and other services to lift the ban
+			$this->sendf(FMT_GLINE_INACTIVE, SERVER_NUM, $mask, 
+				$gline->getDuration(), $gline->getLastMod(), 
+				$gline->getLifetime());
+			
+			// 3. Remove from Service Memory
+			unset($this->glines[$gline_key]);
+			
+			// Optional: Log to wallops so admins know it expired
+			// $this->sendf(FMT_WALLOPS, SERVER_NUM, "G-Line for $mask expired.");
 		}
 	}
-	
-	foreach ($expired_glines as $gline_key) {
-		$this->removeGline($gline_key);
-	}
-	
+?>
