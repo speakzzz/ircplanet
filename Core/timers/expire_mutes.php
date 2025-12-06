@@ -1,6 +1,6 @@
 <?php
 /*
- * ircPlanet Services for ircu
+ * IRCPlanet Services for ircu
  * Copyright (c) 2005 Brian Cline.
  * All rights reserved.
  * 
@@ -29,19 +29,28 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
-	/**
-	 * Check for expired mutes
-	 */
-	
-	$expiredMutes = array();
-
-	foreach ($this->mutes as $muteKey => $mute) {
-		if ($mute->hasExceededLifetime()) {
-			debugf('*** Removing expired mute %s', $mute->getMask());
-			$expiredMutes[] = $muteKey;
+	// Iterate through all active Mutes in memory
+	foreach ($this->mutes as $mask => $mute) {
+		// Check if the mute has expired
+		if ($mute->isExpired()) {
+			$mute_key = strtolower($mask);
+			
+			// 1. Remove from Database safely
+			// We use db_escape to prevent SQL injection issues with the mask
+			$safe_mask = db_escape($mask);
+			db_query("DELETE FROM os_mutes WHERE mask = '$safe_mask'");
+			
+			// 2. Broadcast Removal to Network (MT -)
+			// This tells the IRCd and other services to lift the mute
+			$this->sendf(FMT_MUTE_INACTIVE, SERVER_NUM, $mask, 
+				$mute->getDuration(), $mute->getLastMod(), 
+				$mute->getLifetime());
+			
+			// 3. Remove from Service Memory
+			unset($this->mutes[$mute_key]);
+			
+			// Optional: Log to wallops so admins know it expired
+			// $this->sendf(FMT_WALLOPS, SERVER_NUM, "Mute for $mask expired.");
 		}
 	}
-	
-	foreach ($expiredMutes as $muteKey) {
-		$this->removeMute($muteKey);
-	}
+?>
