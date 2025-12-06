@@ -36,20 +36,19 @@
 			$gline_key = strtolower($mask);
 			
 			// 1. Remove from Database safely
-			// We use db_escape to prevent SQL injection issues with the mask
 			$safe_mask = db_escape($mask);
 			db_query("DELETE FROM os_glines WHERE mask = '$safe_mask'");
 			
 			// 2. Broadcast Removal to Network (GL -)
-			// This tells the IRCd and other services to lift the ban
+			// FIX: Added $gline->getReason() as the 6th argument required by FMT_GLINE_INACTIVE
 			$this->sendf(FMT_GLINE_INACTIVE, SERVER_NUM, $mask, 
 				$gline->getDuration(), $gline->getLastMod(), 
-				$gline->getLifetime());
+				$gline->getLifetime(), $gline->getReason());
 			
 			// 3. Remove from Service Memory
 			unset($this->glines[$gline_key]);
 			
-			// Optional: Log to wallops so admins know it expired
+			// Optional: Log to wallops
 			// $this->sendf(FMT_WALLOPS, SERVER_NUM, "G-Line for $mask expired.");
 		}
 	}
