@@ -35,12 +35,13 @@
 	$this->setCommandInfo('adduser',        800,   2, false, '<account> <level>');
 	$this->setCommandInfo('moduser',        800,   3, false, '<account> <setting> <param>');
 	$this->setCommandInfo('remuser',        800,   1, false, '<account>');
-	
+		
 	$this->setCommandInfo('access',         500,   1, '<mask>');
 	$this->setCommandInfo('inviteme',       500,   0, false);
 	$this->setCommandInfo('addwhite',       500,   1, false, '<hostmask>');
 	$this->setCommandInfo('remwhite',       500,   1, false, '<hostmask>');
 	$this->setCommandInfo('showwhite',      500,   0, false);
+	$this->setCommandInfo('addregex',       500,   2, false, '<pattern> <reason>');
 
 	$this->setCommandInfo('help',             0,   0, false, '[command]');
 	$this->setCommandInfo('showcommands',     0,   0, false);
