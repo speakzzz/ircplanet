@@ -42,6 +42,8 @@
 	$this->setCommandInfo('remwhite',       500,   1, false, '<hostmask>');
 	$this->setCommandInfo('showwhite',      500,   0, false);
 	$this->setCommandInfo('addregex',       500,   2, false, '<pattern> <reason>');
+	$this->setCommandInfo('remregex',       500,   1, false, '<pattern>');
+	$this->setCommandInfo('showregex',      500,   0, false);
 
 	$this->setCommandInfo('help',             0,   0, false, '[command]');
 	$this->setCommandInfo('showcommands',     0,   0, false);
