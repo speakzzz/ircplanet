@@ -29,11 +29,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 	
+	// Only scan on new connections, not nick changes
 	if (!$nick_change) {
 		$whitelisted = $this->isWhitelisted($user);
 		$gline_mask = '*@'. $user->getIp();
 		$gline_set = false;
 
+		// 1. Check Database Blacklist
 		if (defined('BLACK_GLINE') && BLACK_GLINE == true && !$gline_set && !$whitelisted
 				&& $this->isBlacklistedDb($user->getIp()))
 		{
@@ -41,6 +43,7 @@
 			$gline_set = true;
 		}
 		
+		// 2. Check Tor Nodes
 		if (defined('TOR_GLINE') && TOR_GLINE == true && !$gline_set && !$whitelisted
 				&& $this->isTorHost($user->getIp()))
 		{
@@ -48,6 +51,7 @@
 			$gline_set = true;
 		}
 		
+		// 3. Check Compromised Hosts (Open Proxies, Drones)
 		if (defined('COMP_GLINE') && COMP_GLINE == true && !$gline_set && !$whitelisted
 				&& $this->isCompromisedHost($user->getIp()))
 		{
@@ -55,5 +59,4 @@
 			$gline_set = true;
 		}
 	}
-
-
+?>
