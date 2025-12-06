@@ -42,8 +42,12 @@
 		protected function recordConstruct() { }
 		protected function recordDestruct()  { }
 		
+		// FIX: Added getId() for removal commands
+		public function getId()      { return $this->id; }
 		public function getPattern() { return $this->pattern; }
 		public function getReason()  { return $this->reason; }
+		public function getSetBy()   { return $this->set_by; }
+		public function getSetDate() { return $this->create_date; }
 		
 		public function setPattern($s) { $this->pattern = $s; }
 		public function setReason($s)  { $this->reason = $s; }
@@ -51,7 +55,6 @@
 		
 		public function matches($string)
 		{
-			// Suppress errors in case of bad regex
 			return @preg_match($this->pattern, $string);
 		}	
 	}
