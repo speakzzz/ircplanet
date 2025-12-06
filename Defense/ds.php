@@ -30,6 +30,7 @@
 	require('globals.php');
 	require('../Core/service.php');
 	require_once(SERVICE_DIR .'/db_whitelistentry.php');
+	require_once(SERVICE_DIR .'/db_drone_regex.php'); // FIX: Added this include
 	
 	
 	class DefenseService extends Service
@@ -37,13 +38,13 @@
 		var $pending_events = array();
 		var $pending_commands = array();
 		var $whitelist = array();
+		var $drone_regexes = array(); // FIX: Added property
 		
 		
 		function loadWhitelistEntries()
 		{
 			$res = db_query('select * from ds_whitelist order by whitelist_id asc');
 			
-			// Modernization: Use PDO fetch loop
 			if ($res) {
 				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
 					$entry = new DB_WhitelistEntry($row);
@@ -54,6 +55,20 @@
 			}
 
 			debugf('Loaded %d whitelist entries.', count($this->whitelist));
+		}
+
+		// FIX: Added method to load regex patterns
+		function loadDroneRegexes()
+		{
+			$this->drone_regexes = array();
+			$res = db_query('SELECT * FROM ds_drone_regex');
+			
+			if ($res) {
+				while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
+					$this->drone_regexes[] = new DB_DroneRegex($row);
+				}
+			}
+			debugf('Loaded %d drone regex patterns.', count($this->drone_regexes));
 		}
 
 
@@ -70,6 +85,7 @@
 		function serviceLoad()
 		{
 			$this->loadWhitelistEntries();
+			$this->loadDroneRegexes(); // FIX: Load regexes on startup
 		}
 		
 		
@@ -122,7 +138,6 @@
 				$acct_id = $user_obj->getAccountId();
 			}
 			
-			// Modernization: Escape input
 			if (function_exists('db_escape')) {
 				$acct_id = db_escape($acct_id);
 			} else {
@@ -131,7 +146,6 @@
 
 			$res = db_query("select `level` from `ds_admins` where user_id = '$acct_id'");
 			
-			// Modernization: Use rowCount() and fetchColumn()
 			if ($res && $res->rowCount() > 0) {
 				$level = $res->fetchColumn(0);
 				return $level;
@@ -191,12 +205,10 @@
 			if (!defined('BLACK_GLINE') || isPrivateIp($ip))
 				return false;
 			
-			// Modernization: Use db_escape instead of addslashes
 			$res = db_query(sprintf(
 					"select count(entry_id) FROM `ds_blacklist` WHERE `ip_address` = '%s'", 
 					db_escape($ip)));
 			
-			// Modernization: Use fetchColumn()
 			if ($res && $res->fetchColumn(0) > 0) {
 				debugf('IP %s blacklisted by admin.', $ip);
 				return true;
@@ -205,14 +217,8 @@
 			return false;
 		}
 
-
-		/**
-		 * isBlacklistedDns is a generic function to provide extensibility
-		 * for easily checking DNS based blacklists.
-		 */
 		function isBlacklistedDns($host, $dns_suffix, $pos_responses = -1)
 		{
-			// Don't waste time checking private class IPs.
 			if (isPrivateIp($host))
 				return false;
 			
@@ -225,7 +231,6 @@
 			debugf('DNSBL checking %s', $lookup_addr);
 			$dns_result = @dns_get_record($lookup_addr, DNS_A);
 
-			// FIX: Check if $dns_result is explicitly NOT false before counting
 			if ($dns_result !== false && count($dns_result) > 0) {
 				$dns_result = $dns_result[0]['ip'];
 				$resolved = true;
@@ -239,20 +244,16 @@
 			debugf('DNSBL check time elapsed: %0.4f seconds (%s = %s)', 
 					$end_ts - $start_ts, $lookup_addr, $dns_result);
 			
-			// If it didn't resolve, don't check anything
 			if (!$resolved)
 				return false;
 			
-			// Check for any successful resolution
 			if ($resolved && $pos_responses == -1 || empty($pos_responses))
 				return true;
 			
-			// Check for a match against the provided string
 			if (is_string($pos_responses) && !empty($pos_responses)
 			 		&& $dns_result == ('127.0.0.'. $pos_responses))
 				return true;
 			
-			// Check for a match within the provided array
 			if (is_array($pos_responses)) {
 				foreach ($pos_responses as $tmp_match) {
 					$tmp_match = '127.0.0.'. $tmp_match;
@@ -261,14 +262,11 @@
 				}
 			}
 			
-			// All checks failed; host tested negative.
 			return false;
 		}
 		
-		
 		function isTorHost($host)
 		{
-			// UPDATED: Removed dead blacklists
 			$blacklists = array(
 				'tor.dan.me.uk'        => array(100)
 			);
@@ -281,10 +279,8 @@
 			return false;
 		}
 		
-		
 		function isCompromisedHost($host)
 		{
-			// UPDATED: Removed dead blacklists (ahbl, swiftbl, etc) to prevent mass bans
 			$blacklists = array(
 				'dnsbl.dronebl.org'   => array(3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19),
 				'rbl.efnetrbl.org'    => array(1, 2, 3, 4, 5)
@@ -298,6 +294,19 @@
 			return false;
 		}
 		
+		// FIX: Added method to check user against regex patterns
+		function checkDroneRegex($user)
+		{
+			$full_host = $user->getNick() . '!' . $user->getIdent() . '@' . $user->getHost();
+			$real_name = $user->getName();
+			
+			foreach ($this->drone_regexes as $regex) {
+				if ($regex->matches($full_host) || $regex->matches($real_name)) {
+					return $regex; 
+				}
+			}
+			return false;
+		}
 		
 		function performGline($gline_mask, $gline_duration, $gline_reason)
 		{
