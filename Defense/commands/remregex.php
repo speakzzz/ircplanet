@@ -27,38 +27,49 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-	// Syntax: REMREGEX <pattern>
+	// Syntax: REMREGEX <id>
 	if ($cmd_num_args < 1) {
-		$bot->notice($user, "Syntax: REMREGEX <pattern>");
+		$bot->notice($user, "Syntax: REMREGEX <id>");
+		$bot->notice($user, "Use SHOWREGEX to find the ID number.");
 		return false;
 	}
 
-	$pattern = assemble($pargs, 1);
+	$target_id = $pargs[1];
+	
+	// Validate that ID is a number
+	if (!is_numeric($target_id)) {
+		$bot->notice($user, "Invalid ID. Please specify the numeric ID of the pattern.");
+		return false;
+	}
+
 	$found = false;
 
-	// Find the regex object in memory
+	// Find the regex object in memory to confirm it exists and get the pattern string
 	foreach ($this->drone_regexes as $regex) {
-		if ($regex->getPattern() == $pattern) {
+		if ($regex->getId() == $target_id) {
 			$found = $regex;
 			break;
 		}
 	}
 
 	if (!$found) {
-		$bot->noticef($user, "Pattern '%s' not found.", $pattern);
+		$bot->noticef($user, "Regex ID %d not found.", $target_id);
 		return false;
 	}
 
-	// Delete from Database
-	$id = $found->getId();
-	db_query("DELETE FROM ds_drone_regex WHERE id = ?", [$id]);
+	$pattern_str = $found->getPattern();
+	$safe_id = db_escape($target_id);
 
-	// Reload Memory
+	// Delete from Database
+	// We use direct interpolation to ensure compatibility with your current db_query
+	db_query("DELETE FROM ds_drone_regex WHERE id = '$safe_id'");
+
+	// Reload Memory to reflect changes
 	$this->loadDroneRegexes();
 
-	$bot->noticef($user, "Removed regex pattern: %s", $pattern);
+	$bot->noticef($user, "Removed regex pattern (ID %d): %s", $target_id, $pattern_str);
 	
 	// Log it
-	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Regex %s removed by %s", 
-		$pattern, $user->getNick()));
+	$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Regex ID %d (%s) removed by %s", 
+		$target_id, $pattern_str, $user->getNick()));
 ?>
