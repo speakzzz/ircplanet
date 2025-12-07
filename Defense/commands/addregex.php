@@ -37,20 +37,53 @@
 	$pattern = $pargs[1];
 	$reason = assemble($pargs, 2);
 
-	// Validate Regex validity
+	// 1. Validate Regex
 	if (@preg_match($pattern, "test") === false) {
 		$bot->notice($user, "Invalid Regex pattern.");
 		return false;
 	}
 
+	// 2. Save to Database
 	$regex = new DB_DroneRegex();
 	$regex->setPattern($pattern);
 	$regex->setReason($reason);
 	$regex->setSetBy($user->getNick());
 	$regex->save();
 	
-	// Reload memory
+	// 3. Reload Memory
 	$this->loadDroneRegexes();
 	
 	$bot->notice($user, "Added regex pattern: $pattern");
+
+	// 4. SCAN EXISTING USERS (The Fix)
+	$match_count = 0;
+	$bot->notice($user, "Scanning network for matches...");
+
+	foreach ($this->users as $u) {
+		// Skip services and bots
+		if ($u->isBot() || $u->isService()) continue;
+
+		// Check this user against the NEW regex list
+		// We use the specific checkDroneRegex method from ds.php
+		if ($match = $this->checkDroneRegex($u)) {
+			// It matched! Ban them.
+			$gline_mask = '*@' . $u->getIp();
+			
+			// Prevent double-glining if we already hit this IP in this loop
+			// (Optimization for clones)
+			
+			$this->performGline($gline_mask, '1d', 'Drone/Bot detected: ' . $match->getReason());
+			
+			$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Regex Ban on %s (Match: %s)", 
+				$u->getNick(), $match->getPattern()));
+			
+			$match_count++;
+		}
+	}
+
+	if ($match_count > 0) {
+		$bot->noticef($user, "Scan complete: Banned %d existing users matching this pattern.", $match_count);
+	} else {
+		$bot->notice($user, "Scan complete: No existing users matched.");
+	}
 ?>
