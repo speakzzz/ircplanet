@@ -58,5 +58,21 @@
 			$this->performGline($gline_mask, COMP_DURATION, COMP_REASON);
 			$gline_set = true;
 		}
+
+		// 4. Check Drone Regex (Realname/Hostname Patterns)
+		// FIX: Added this block to actually perform the regex scan
+		if (!$gline_set && !$whitelisted) {
+			$match = $this->checkDroneRegex($user);
+			if ($match) {
+				// Default ban time 1 day for regex matches
+				$this->performGline($gline_mask, '1d', 'Drone/Bot detected: ' . $match->getReason());
+				
+				// Log the hit to Wallops
+				$this->sendf(FMT_WALLOPS, SERVER_NUM, sprintf("Regex Ban on %s (Match: %s)", 
+					$user->getNick(), $match->getPattern()));
+				
+				$gline_set = true;
+			}
+		}
 	}
 ?>
